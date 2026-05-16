@@ -75,50 +75,7 @@ const SEED = [
     shipping_address:{name:"Fabian",phone:"+573046097929",city:"Bogotá",address1:"Calle 50 #20-30"},
     user:{id:"573046097929",full_name:"Fabian",phone:"+573046097929",country:"CO"}, _real:true },
 
-  { id:"demo-002", user_id:"573111222333", created_at:"2026-05-15T11:30:00+00:00", created_timestamp:"1778844600",
-    total:3490000, subtotal:3490000, shipping_cost:0, total_taxes:0, total_discounts:0, total_items:2,
-    status:"Processing", payment_method:"Nequi", email:"maria@mail.co",
-    line_items:[
-      {id:"4",name:"Hamburguesa BBQ",sku:"HB003",price:"26500.00",amount:"1",long_description:"Carne Angus con salsa BBQ"},
-      {id:"5",name:"Jugo Natural",   sku:"JS001",price:"7900.00", amount:"1",long_description:"Jugo de frutas tropicales"},
-    ],
-    shipping_address:{name:"María García",phone:"+573111222333",city:"Bogotá",address1:"Carrera 15 #45-22"},
-    user:{id:"573111222333",full_name:"María García",phone:"+573111222333",country:"CO"}, _real:false },
 
-  { id:"demo-003", user_id:"573444555666", created_at:"2026-05-15T09:15:00+00:00", created_timestamp:"1778836500",
-    total:5830000, subtotal:5830000, shipping_cost:0, total_taxes:0, total_discounts:0, total_items:4,
-    status:"Shipped", payment_method:"Efectivo", email:"",
-    line_items:[
-      {id:"6",name:"Alitas BBQ",     sku:"AL001",price:"22900.00",amount:"2",long_description:"Alitas BBQ"},
-      {id:"7",name:"Gaseosa Naranja",sku:"GS002",price:"5500.00", amount:"2",long_description:"400ml"},
-    ],
-    shipping_address:{name:"Carlos Ruiz",phone:"+573444555666",city:"Bogotá",address1:"Av. El Dorado #68-11"},
-    user:{id:"573444555666",full_name:"Carlos Ruiz",phone:"+573444555666",country:"CO"}, _real:false },
-
-  { id:"demo-004", user_id:"573777888999", created_at:"2026-05-15T08:00:00+00:00", created_timestamp:"1778832000",
-    total:10330000, subtotal:10330000, shipping_cost:0, total_taxes:0, total_discounts:0, total_items:6,
-    status:"Delivered", payment_method:"Daviplata", email:"sofia@mail.co",
-    line_items:[
-      {id:"8", name:"Hamburguesa BBQ",sku:"HB003",price:"26500.00",amount:"2",long_description:"Carne Angus"},
-      {id:"9", name:"Salchipapas",    sku:"PC003",price:"17900.00",amount:"2",long_description:"Con queso"},
-      {id:"10",name:"Jugo Natural",   sku:"JS001",price:"7900.00", amount:"2",long_description:"Tropical"},
-    ],
-    shipping_address:{name:"Sofía Torres",phone:"+573777888999",city:"Bogotá",address1:"Calle 100 #15-30"},
-    user:{id:"573777888999",full_name:"Sofía Torres",phone:"+573777888999",country:"CO"}, _real:false },
-
-  { id:"demo-005", user_id:"573000111222", created_at:"2026-05-15T12:10:00+00:00", created_timestamp:"1778847000",
-    total:2290000, subtotal:2290000, shipping_cost:0, total_taxes:0, total_discounts:0, total_items:1,
-    status:"Not processed", payment_method:"Nequi", email:"",
-    line_items:[{id:"11",name:"Alitas BBQ",sku:"AL001",price:"22900.00",amount:"1",long_description:"BBQ dulce"}],
-    shipping_address:{name:"Diego Moreno",phone:"+573000111222",city:"Bogotá",address1:"Carrera 7 #32-15"},
-    user:{id:"573000111222",full_name:"Diego Moreno",phone:"+573000111222",country:"CO"}, _real:false },
-
-  { id:"demo-006", user_id:"573555666777", created_at:"2026-05-15T07:30:00+00:00", created_timestamp:"1778830200",
-    total:1790000, subtotal:1790000, shipping_cost:0, total_taxes:0, total_discounts:0, total_items:1,
-    status:"Cancelled", payment_method:"", email:"",
-    line_items:[{id:"12",name:"Salchipapas",sku:"PC003",price:"17900.00",amount:"1",long_description:"Papas fritas"}],
-    shipping_address:{name:"Luis Medina",phone:"+573555666777",city:"Bogotá",address1:"Transversal 28 #80-10"},
-    user:{id:"573555666777",full_name:"Luis Medina",phone:"+573555666777",country:"CO"}, _real:false },
 ];
 
 /* ══════════════════════════ ANALYTICS DATA ═════════════════════════════════ */
@@ -218,18 +175,23 @@ const CSS=`
 
 @media(max-width:768px){
   .os{flex-direction:column;}
-  .sidebar{width:100%;height:56px;flex-direction:row;justify-content:space-around;border-right:none;border-top:1px solid #1a2236;order:2;padding:0 8px;gap:0;}
-  .navbtn{width:48px;height:48px;border-radius:10px;}
+  .sidebar{width:100%;height:58px;flex-direction:row;justify-content:space-around;align-items:center;border-right:none;border-top:1px solid #1a2236;order:2;padding:0 4px;gap:0;flex-shrink:0;}
+  .sidebar img{width:28px !important;}
+  .navbtn{width:44px;height:44px;border-radius:10px;flex-direction:column;}
   .navbtn.on::before{display:none;}
-  .main{order:1;height:calc(100vh - 56px);}
-  .hdr{padding:0 14px;height:50px;}
-  .body{padding:12px;}
-  .body.kanban{padding:10px;}
-  .kanban-row{gap:10px;}
-  .kcol{min-width:240px;width:240px;}
-  .modal{width:95vw;padding:18px;border-radius:14px;}
-  .toast-wrap{top:8px;right:8px;left:8px;}
+  .main{order:1;height:calc(100vh - 58px);overflow:hidden;}
+  .hdr{padding:0 12px;height:48px;gap:8px;}
+  .hdr span{font-size:11px !important;}
+  .body{padding:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .body.kanban{padding:10px;overflow-x:auto;overflow-y:hidden;}
+  .kanban-row{gap:10px;height:100%;}
+  .kcol{min-width:260px;width:260px;max-height:calc(100vh - 106px);}
+  .kcard{cursor:pointer;}
+  .modal-bg{position:fixed;}
+  .modal{width:96vw;max-width:96vw;padding:18px;border-radius:16px;max-height:90vh;}
+  .toast-wrap{position:fixed;top:auto;bottom:70px;right:8px;left:8px;}
   .toast{min-width:unset;width:100%;}
+  .stat{padding:14px;}
 }
 `;
 
