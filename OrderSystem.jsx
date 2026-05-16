@@ -33,8 +33,8 @@ const CSS=`
 .os{font-family:'Syne',sans-serif;background:#060a12;color:#dde6f0;min-height:100vh;display:flex;overflow:hidden;position:relative;}
 .os *{box-sizing:border-box;margin:0;padding:0;}
 .os ::-webkit-scrollbar{width:3px;height:3px;}.os ::-webkit-scrollbar-thumb{background:#25D36640;border-radius:4px;}
-.auth-bg{min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#060a12;}
-.auth-card{background:#0d1526;border:1px solid #1a2742;border-radius:20px;padding:40px;width:100%;max-width:420px;margin:20px;}
+.auth-bg{min-height:100vh;width:100vw;display:flex;align-items:center;justify-content:center;background:#060a12;background-image:radial-gradient(ellipse at 30% 40%,#25D36608 0%,transparent 60%);}
+.auth-card{background:#0d1526;border:1px solid #1a2742;border-radius:20px;padding:40px;width:420px;max-width:calc(100vw - 40px);}
 .auth-logo{width:150px;margin:0 auto 28px;display:block;}
 .auth-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:6px;}
 .auth-sub{font-size:13px;color:#64748b;text-align:center;margin-bottom:28px;}
