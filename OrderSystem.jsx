@@ -1,299 +1,608 @@
-const express = require("express");
-const cors = require("cors");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
-const { Pool } = require("pg");
-const rateLimit = require("express-rate-limit");
-require("dotenv").config();
+import { useState, useEffect, useCallback, useRef } from "react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
-const app = express();
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-});
+const API_BASE    = "https://api.chatico.net";
+const CHATICO_API = "https://app.chatico.io/api";
+const LOGO = "https://chatiico.com/wp-content/uploads/2024/06/cropped-cropped-logo-col-completo-IA-blanco24-.png";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT),
-  secure: true,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-});
+const cop = (c) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format((c||0)/100);
+const copRaw = (p) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(parseFloat(p)||0);
+const fmtTime = (iso) => { try{return new Date(iso).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"});}catch{return "--:--";} };
+const getToken = () => localStorage.getItem("cht_token");
+const getUser  = () => { try{return JSON.parse(localStorage.getItem("cht_user"));}catch{return null;} };
 
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
-app.use(express.json());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+const STATUS = {
+  "Not processed":{label:"Nuevo Pedido",  col:"#3b82f6",bg:"#0f2748",icon:"📥"},
+  "Processing":   {label:"En Preparación",col:"#f59e0b",bg:"#3d1f00",icon:"🔥"},
+  "Shipped":      {label:"Enviado",       col:"#a78bfa",bg:"#2c1654",icon:"🛵"},
+  "Delivered":    {label:"Entregado",     col:"#22c55e",bg:"#052612",icon:"✅"},
+  "Cancelled":    {label:"Cancelado",     col:"#ef4444",bg:"#3c0a0a",icon:"❌"},
+};
+const SK = ["Not processed","Processing","Shipped","Delivered","Cancelled"];
 
-const auth = (roles = []) => (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (roles.length && !roles.includes(decoded.role)) return res.status(403).json({ error: "Sin permisos" });
-    req.user = decoded;
-    next();
-  } catch { res.status(401).json({ error: "No autorizado" }); }
+const authH = () => ({"Content-Type":"application/json","Authorization":`Bearer ${getToken()}`});
+const apiFetch = async(path,opts={}) => { try{const r=await fetch(`${API_BASE}${path}`,{headers:authH(),...opts});return await r.json();}catch{return null;} };
+const chFetch  = async(path,token,opts={}) => { try{const r=await fetch(`${CHATICO_API}${path}`,{headers:{"accept":"application/json","X-ACCESS-TOKEN":token},...opts});return await r.json();}catch{return null;} };
+
+const WEEKLY=[{d:"Lun",v:145000,p:8},{d:"Mar",v:220000,p:12},{d:"Mié",v:189000,p:10},{d:"Jue",v:310000,p:17},{d:"Vie",v:278000,p:15},{d:"Sáb",v:390000,p:21},{d:"Hoy",v:246300,p:13}];
+const TOPROD=[{name:"Hamburguesa BBQ",qty:34},{name:"Alitas BBQ",qty:28},{name:"Salchipapas",qty:22},{name:"Jugo Natural",qty:19},{name:"Gaseosa Naranja",qty:15}];
+const PAYS=[{name:"Nequi",pct:38,color:"#7c3aed"},{name:"Efectivo",pct:28,color:"#f59e0b"},{name:"Daviplata",pct:22,color:"#f97316"},{name:"Tarjeta",pct:12,color:"#3b82f6"}];
+
+const CSS=`
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+.os{font-family:'Syne',sans-serif;background:#060a12;color:#dde6f0;min-height:100vh;display:flex;overflow:hidden;position:relative;}
+.os *{box-sizing:border-box;margin:0;padding:0;}
+.os ::-webkit-scrollbar{width:3px;height:3px;}.os ::-webkit-scrollbar-thumb{background:#25D36640;border-radius:4px;}
+.auth-bg{min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#060a12;}
+.auth-card{background:#0d1526;border:1px solid #1a2742;border-radius:20px;padding:40px;width:100%;max-width:420px;margin:20px;}
+.auth-logo{width:150px;margin:0 auto 28px;display:block;}
+.auth-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:6px;}
+.auth-sub{font-size:13px;color:#64748b;text-align:center;margin-bottom:28px;}
+.auth-lbl{font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:6px;display:block;}
+.auth-field{margin-bottom:16px;}
+.auth-link{color:#25D366;font-size:13px;cursor:pointer;background:none;border:none;font-family:'Syne',sans-serif;font-weight:600;padding:0;}
+.auth-link:hover{text-decoration:underline;}
+.auth-err{background:#3c0a0a;border:1px solid #ef444430;border-radius:8px;padding:10px 14px;font-size:13px;color:#fca5a5;margin-bottom:14px;}
+.auth-ok{background:#052612;border:1px solid #22c55e30;border-radius:8px;padding:10px 14px;font-size:13px;color:#86efac;margin-bottom:14px;}
+.auth-div{display:flex;align-items:center;gap:12px;margin:20px 0;color:#1e2d3d;font-size:12px;}
+.auth-div::before,.auth-div::after{content:'';flex:1;height:1px;background:#1e2d3d;}
+.sidebar{width:62px;background:#0a0f1c;border-right:1px solid #1a2236;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px;flex-shrink:0;}
+.navbtn{width:42px;height:42px;border-radius:12px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative;color:#4b5563;}
+.navbtn:hover{background:#ffffff10;color:#94a3b8;}.navbtn.on{background:#25D36618;color:#25D366;}
+.navbtn.on::before{content:'';position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:20px;background:#25D366;border-radius:0 3px 3px 0;}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.hdr{background:#0a0f1c;border-bottom:1px solid #1a2236;padding:0 22px;height:56px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
+.body{flex:1;overflow-y:auto;padding:20px;}.body.kb{overflow-y:hidden;overflow-x:auto;}
+.card{background:#0d1526;border:1px solid #1a2742;border-radius:14px;}
+.krow{display:flex;gap:14px;height:100%;padding-bottom:8px;}
+.kcol{background:#0a0f1c;border:1px solid #1a2236;border-radius:14px;padding:13px;width:265px;min-width:265px;display:flex;flex-direction:column;gap:8px;max-height:100%;}
+.kcol.ov{border-color:#25D36650;background:#25D36606;}
+.kbody{display:flex;flex-direction:column;gap:9px;overflow-y:auto;flex:1;}
+.kcard{background:#111827;border:1px solid #1e2d3d;border-radius:10px;padding:12px;cursor:grab;transition:transform .15s,box-shadow .15s,border-color .15s;}
+.kcard:hover{border-color:#25D36635;transform:translateY(-2px);box-shadow:0 6px 20px #00000050;}
+.kcard.drag{opacity:.35;cursor:grabbing;}
+.btn{border:none;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;transition:all .18s;font-size:12px;display:inline-flex;align-items:center;gap:5px;}
+.btn-g{background:#25D366;color:#000;padding:7px 14px;}.btn-g:hover{background:#1dba58;}.btn-g:disabled{background:#1a4d33;color:#4b5563;cursor:not-allowed;}
+.btn-h{background:transparent;color:#64748b;border:1px solid #1e2d3d;padding:7px 14px;}.btn-h:hover{border-color:#25D366;color:#25D366;}
+.btn-sm{padding:5px 10px;font-size:11px;}.btn-full{width:100%;justify-content:center;padding:12px;font-size:14px;}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;font-size:10px;font-family:'DM Mono',monospace;font-weight:500;}
+.inp{background:#111827;border:1px solid #1e2d3d;border-radius:8px;padding:9px 13px;color:#dde6f0;font-family:'Syne',sans-serif;font-size:13px;outline:none;transition:border .2s;width:100%;}
+.inp:focus{border-color:#25D366;}
+.modal-bg{position:absolute;inset:0;background:#00000088;display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px);}
+.modal{background:#0d1526;border:1px solid #1a2742;border-radius:18px;padding:26px;width:530px;max-height:86vh;overflow-y:auto;}
+.toast-wrap{position:absolute;top:14px;right:14px;z-index:100;display:flex;flex-direction:column;gap:8px;}
+.toast{background:#0d1526;border:1px solid #1a2742;border-radius:12px;padding:13px 16px;min-width:270px;display:flex;align-items:flex-start;gap:10px;box-shadow:0 8px 30px #00000060;animation:tIn .3s ease;}
+@keyframes tIn{from{opacity:0;transform:translateX(36px);}to{opacity:1;transform:translateX(0);}}
+.dot{width:7px;height:7px;border-radius:50%;background:#25D366;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #25D36650;}50%{box-shadow:0 0 0 5px #25D36600;}}
+.mono{font-family:'DM Mono',monospace;}
+.fade{animation:fade .3s ease;}@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.stat{background:#0d1526;border:1px solid #1a2742;border-radius:14px;padding:18px;}
+.spin{width:18px;height:18px;border:2px solid #1e2d3d;border-top-color:#25D366;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;}
+@keyframes sp{to{transform:rotate(360deg);}}
+@media(max-width:768px){
+  .os{flex-direction:column;}
+  .sidebar{width:100%;height:58px;flex-direction:row;justify-content:space-around;align-items:center;border-right:none;border-top:1px solid #1a2236;order:2;padding:0 4px;gap:0;flex-shrink:0;}
+  .navbtn.on::before{display:none;}.main{order:1;height:calc(100vh - 58px);overflow:hidden;}
+  .hdr{padding:0 12px;height:48px;gap:8px;}.body{padding:10px;}
+  .body.kb{padding:10px;overflow-x:auto;overflow-y:hidden;}
+  .krow{gap:10px;height:100%;}.kcol{min-width:255px;width:255px;max-height:calc(100vh - 106px);}
+  .modal-bg{position:fixed;}.modal{width:96vw;max-width:96vw;padding:18px;border-radius:16px;max-height:90vh;}
+  .toast-wrap{position:fixed;bottom:70px;top:auto;right:8px;left:8px;}.toast{min-width:unset;width:100%;}
+  .auth-card{padding:24px 18px;margin:12px;}
+}
+`;
+
+const Ic=({d,size=17,color="currentColor",...r})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...r}><path d={d}/></svg>;
+const I={
+  pipe: (c)=><Ic color={c} d="M3 5h4v14H3V5zm7 0h4v14h-4V5zm7 4h4v10h-4V9z"/>,
+  chart:(c)=><Ic color={c} d="M3 3v18h18M9 17V9m4 8v-5m4 5V5"/>,
+  users:(c)=><Ic color={c} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>,
+  cog:  (c)=><Ic color={c} d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>,
+  x:    ()=><Ic d="M18 6L6 18M6 6l12 12"/>,
+  eye:  ()=><Ic d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 100 6 3 3 0 000-6z"/>,
+  eyeo: ()=><Ic d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>,
+  out:  ()=><Ic d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>,
 };
 
-/* ── REGISTER ── */
-app.post("/auth/register", async (req, res) => {
-  try {
-    const { name, email, password, business_name } = req.body;
-    if (!name || !email || !password || !business_name) return res.status(400).json({ error: "Todos los campos son requeridos" });
-    const exists = await pool.query("SELECT id FROM users WHERE email=$1", [email]);
-    if (exists.rows.length) return res.status(400).json({ error: "Email ya registrado" });
-    const confirmToken = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: "24h" });
-    const tenant = await pool.query("INSERT INTO tenants(name,email) VALUES($1,$2) RETURNING id", [business_name, email]);
-    const hash = await bcrypt.hash(password, 12);
-    await pool.query("INSERT INTO users(tenant_id,name,email,password,role,confirm_token) VALUES($1,$2,$3,$4,'admin',$5)",
-      [tenant.rows[0].id, name, email, hash, confirmToken]);
-    await transporter.sendMail({
-      from: `"Chatiico" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "Confirma tu cuenta — Chatiico",
-      html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#0d1526;color:#dde6f0;border-radius:16px">
-        <img src="https://chatiico.com/wp-content/uploads/2024/06/cropped-cropped-logo-col-completo-IA-blanco24-.png" style="width:160px;margin-bottom:24px"/>
-        <h2 style="color:#25D366">Bienvenido ${name}</h2>
-        <p>Confirma tu cuenta para empezar a gestionar tus pedidos.</p>
-        <a href="${process.env.FRONTEND_URL}/confirm/${confirmToken}" style="display:inline-block;background:#25D366;color:#000;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px">Confirmar cuenta</a>
-        <p style="margin-top:24px;color:#4b5563;font-size:12px">Este enlace expira en 24 horas.</p>
-      </div>`
-    });
-    res.json({ success: true, message: "Revisa tu email para confirmar tu cuenta" });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+const Av=({name="",size=34})=>{
+  const ini=name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  const C=["#3b82f6","#8b5cf6","#f59e0b","#25D366","#f97316","#06b6d4"];
+  const bg=C[name.charCodeAt(0)%C.length];
+  return <div style={{width:size,height:size,borderRadius:"50%",background:bg+"28",border:`1.5px solid ${bg}45`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.34,fontWeight:700,color:bg,flexShrink:0}}>{ini}</div>;
+};
+const SBadge=({s,small})=>{const st=STATUS[s]||STATUS["Not processed"];return <span className="badge" style={{background:st.bg,color:st.col,border:`1px solid ${st.col}25`,fontSize:small?9:10}}>{st.icon} {st.label}</span>;};
+const CTip=({active,payload,label})=>{if(!active||!payload?.length)return null;return<div style={{background:"#0d1526",border:"1px solid #1a2742",borderRadius:8,padding:"9px 13px"}}><div style={{fontSize:10,color:"#64748b",marginBottom:3,fontFamily:"DM Mono"}}>{label}</div>{payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color||"#25D366",fontFamily:"DM Mono"}}>{typeof p.value==="number"&&p.value>9999?cop(p.value*100):p.value}</div>)}</div>;};
 
-/* ── CONFIRM EMAIL ── */
-app.get("/auth/confirm/:token", async (req, res) => {
-  try {
-    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
-    await pool.query("UPDATE users SET confirmed=true, confirm_token=null WHERE email=$1", [decoded.email]);
-    await pool.query("UPDATE tenants SET active=true WHERE email=$1", [decoded.email]);
-    res.redirect(`${process.env.FRONTEND_URL}/login?confirmed=true`);
-  } catch { res.redirect(`${process.env.FRONTEND_URL}/login?error=token_invalido`); }
-});
+/* ── AUTH ── */
+const AuthScreen=({onLogin})=>{
+  const [scr,setScr]=useState("login");
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [ok,setOk]=useState("");
+  const [showP,setShowP]=useState(false);
+  const [f,setF]=useState({name:"",email:"",password:"",business_name:""});
+  const s=(k,v)=>setF(p=>({...p,[k]:v}));
 
-/* ── LOGIN ── */
-app.post("/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const user = await pool.query(
-      `SELECT u.*,t.name as business,t.chatico_token,t.flow_confirmed,t.flow_processing,
-       t.flow_shipped,t.flow_delivered,t.flow_cancelled,t.active as tenant_active
-       FROM users u JOIN tenants t ON u.tenant_id=t.id WHERE u.email=$1`, [email]);
-    if (!user.rows.length) return res.status(401).json({ error: "Credenciales incorrectas" });
-    const u = user.rows[0];
-    if (!u.confirmed) return res.status(401).json({ error: "Confirma tu email primero" });
-    if (!u.tenant_active) return res.status(401).json({ error: "Cuenta inactiva, contacta soporte" });
-    const valid = await bcrypt.compare(password, u.password);
-    if (!valid) return res.status(401).json({ error: "Credenciales incorrectas" });
-    const token = jwt.sign(
-      { id: u.id, tenant_id: u.tenant_id, role: u.role, name: u.name, email: u.email, business: u.business },
-      process.env.JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, business: u.business,
-      chatico_token: u.chatico_token,
-      flows: { confirmed: u.flow_confirmed, processing: u.flow_processing, shipped: u.flow_shipped, delivered: u.flow_delivered, cancelled: u.flow_cancelled }
-    }});
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  useEffect(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("confirmed")){setOk("✅ Email confirmado. Ya puedes iniciar sesión.");setScr("login");}
+    if(p.get("error")){setErr("❌ Link inválido o expirado.");}
+  },[]);
 
-/* ── FORGOT PASSWORD ── */
-app.post("/auth/forgot", async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
-    if (!user.rows.length) return res.json({ success: true });
-    const resetToken = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: "1h" });
-    await pool.query("UPDATE users SET reset_token=$1 WHERE email=$2", [resetToken, email]);
-    await transporter.sendMail({
-      from: `"Chatiico" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "Recupera tu contraseña — Chatiico",
-      html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#0d1526;color:#dde6f0;border-radius:16px">
-        <img src="https://chatiico.com/wp-content/uploads/2024/06/cropped-cropped-logo-col-completo-IA-blanco24-.png" style="width:160px;margin-bottom:24px"/>
-        <h2 style="color:#25D366">Recupera tu contraseña</h2>
-        <a href="${process.env.FRONTEND_URL}/reset/${resetToken}" style="display:inline-block;background:#25D366;color:#000;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px">Cambiar contraseña</a>
-        <p style="margin-top:24px;color:#4b5563;font-size:12px">Expira en 1 hora.</p>
-      </div>`
-    });
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  const login=async()=>{
+    setErr("");setLoading(true);
+    const r=await fetch(`${API_BASE}/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:f.email,password:f.password})}).then(r=>r.json()).catch(()=>null);
+    setLoading(false);
+    if(r?.token){localStorage.setItem("cht_token",r.token);localStorage.setItem("cht_user",JSON.stringify(r.user));onLogin(r.user);}
+    else setErr(r?.error||"Error al iniciar sesión");
+  };
 
-/* ── RESET PASSWORD ── */
-app.post("/auth/reset", async (req, res) => {
-  try {
-    const { token, password } = req.body;
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const hash = await bcrypt.hash(password, 12);
-    await pool.query("UPDATE users SET password=$1, reset_token=null WHERE email=$2", [hash, decoded.email]);
-    res.json({ success: true });
-  } catch { res.status(400).json({ error: "Token inválido o expirado" }); }
-});
+  const register=async()=>{
+    setErr("");setLoading(true);
+    const r=await fetch(`${API_BASE}/auth/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(f)}).then(r=>r.json()).catch(()=>null);
+    setLoading(false);
+    if(r?.success){setOk("📧 Revisa tu email para confirmar tu cuenta.");setScr("confirm");}
+    else setErr(r?.error||"Error al registrarse");
+  };
 
-/* ── GET PROFILE ── */
-app.get("/auth/me", auth(), async (req, res) => {
-  try {
-    const user = await pool.query(
-      `SELECT u.id,u.name,u.email,u.role,t.name as business,t.chatico_token,
-       t.flow_confirmed,t.flow_processing,t.flow_shipped,t.flow_delivered,t.flow_cancelled
-       FROM users u JOIN tenants t ON u.tenant_id=t.id WHERE u.id=$1`, [req.user.id]);
-    res.json(user.rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  const forgot=async()=>{
+    setErr("");setLoading(true);
+    await fetch(`${API_BASE}/auth/forgot`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:f.email})}).then(r=>r.json()).catch(()=>null);
+    setLoading(false);
+    setOk("📧 Si el email existe, recibirás el enlace en unos minutos.");
+  };
 
-/* ── UPDATE CONFIG ── */
-app.put("/config", auth(["admin"]), async (req, res) => {
-  try {
-    const { chatico_token, flow_confirmed, flow_processing, flow_shipped, flow_delivered, flow_cancelled } = req.body;
-    await pool.query(
-      "UPDATE tenants SET chatico_token=$1,flow_confirmed=$2,flow_processing=$3,flow_shipped=$4,flow_delivered=$5,flow_cancelled=$6 WHERE id=$7",
-      [chatico_token, flow_confirmed, flow_processing, flow_shipped, flow_delivered, flow_cancelled, req.user.tenant_id]);
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  return(
+    <div className="auth-bg">
+      <div className="auth-card fade">
+        <img src={LOGO} className="auth-logo" alt="Chatiico"/>
 
-/* ── INVITE AGENT ── */
-app.post("/users/invite", auth(["admin"]), async (req, res) => {
-  try {
-    const { name, email } = req.body;
-    const exists = await pool.query("SELECT id FROM users WHERE email=$1", [email]);
-    if (exists.rows.length) return res.status(400).json({ error: "Email ya registrado" });
-    const tempPass = Math.random().toString(36).slice(-8);
-    const hash = await bcrypt.hash(tempPass, 12);
-    await pool.query("INSERT INTO users(tenant_id,name,email,password,role,confirmed) VALUES($1,$2,$3,$4,'agent',true)",
-      [req.user.tenant_id, name, email, hash]);
-    await transporter.sendMail({
-      from: `"Chatiico" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "Te invitaron a Chatiico",
-      html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#0d1526;color:#dde6f0;border-radius:16px">
-        <img src="https://chatiico.com/wp-content/uploads/2024/06/cropped-cropped-logo-col-completo-IA-blanco24-.png" style="width:160px;margin-bottom:24px"/>
-        <h2 style="color:#25D366">Te invitaron a Chatiico</h2>
-        <p>Email: <strong>${email}</strong></p>
-        <p>Contraseña temporal: <strong style="color:#25D366">${tempPass}</strong></p>
-        <a href="${process.env.FRONTEND_URL}/login" style="display:inline-block;background:#25D366;color:#000;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px">Ingresar</a>
-      </div>`
-    });
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+        {scr==="login"&&<>
+          <h2 className="auth-title">Bienvenido</h2>
+          <p className="auth-sub">Ingresa a tu cuenta de pedidos</p>
+          {err&&<div className="auth-err">{err}</div>}
+          {ok&&<div className="auth-ok">{ok}</div>}
+          <div className="auth-field"><label className="auth-lbl">Email</label><input className="inp" type="email" placeholder="tu@email.com" value={f.email} onChange={e=>s("email",e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/></div>
+          <div className="auth-field">
+            <label className="auth-lbl">Contraseña</label>
+            <div style={{position:"relative"}}>
+              <input className="inp" type={showP?"text":"password"} placeholder="••••••••" value={f.password} onChange={e=>s("password",e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} style={{paddingRight:40}}/>
+              <button onClick={()=>setShowP(!showP)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#64748b"}}>{showP?<I.eyeo/>:<I.eye/>}</button>
+            </div>
+          </div>
+          <div style={{textAlign:"right",marginBottom:16}}><button className="auth-link" onClick={()=>{setScr("forgot");setErr("");setOk("");}}>¿Olvidaste tu contraseña?</button></div>
+          <button className="btn btn-g btn-full" onClick={login} disabled={loading}>{loading?<span className="spin"/>:"Iniciar sesión"}</button>
+          <div className="auth-div">o</div>
+          <div style={{textAlign:"center",fontSize:13,color:"#64748b"}}>¿No tienes cuenta? <button className="auth-link" onClick={()=>{setScr("register");setErr("");setOk("");}}>Regístrate gratis</button></div>
+        </>}
 
-/* ── LIST USERS ── */
-app.get("/users", auth(["admin"]), async (req, res) => {
-  try {
-    const users = await pool.query(
-      "SELECT id,name,email,role,confirmed,created_at FROM users WHERE tenant_id=$1 ORDER BY created_at DESC",
-      [req.user.tenant_id]);
-    res.json(users.rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+        {scr==="register"&&<>
+          <h2 className="auth-title">Crear cuenta</h2>
+          <p className="auth-sub">Empieza a gestionar tus pedidos</p>
+          {err&&<div className="auth-err">{err}</div>}
+          <div className="auth-field"><label className="auth-lbl">Nombre completo</label><input className="inp" placeholder="Tu nombre" value={f.name} onChange={e=>s("name",e.target.value)}/></div>
+          <div className="auth-field"><label className="auth-lbl">Nombre del negocio</label><input className="inp" placeholder="Mi Restaurante" value={f.business_name} onChange={e=>s("business_name",e.target.value)}/></div>
+          <div className="auth-field"><label className="auth-lbl">Email</label><input className="inp" type="email" placeholder="tu@email.com" value={f.email} onChange={e=>s("email",e.target.value)}/></div>
+          <div className="auth-field">
+            <label className="auth-lbl">Contraseña</label>
+            <div style={{position:"relative"}}>
+              <input className="inp" type={showP?"text":"password"} placeholder="Mínimo 8 caracteres" value={f.password} onChange={e=>s("password",e.target.value)} style={{paddingRight:40}}/>
+              <button onClick={()=>setShowP(!showP)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#64748b"}}>{showP?<I.eyeo/>:<I.eye/>}</button>
+            </div>
+          </div>
+          <button className="btn btn-g btn-full" onClick={register} disabled={loading}>{loading?<span className="spin"/>:"Crear cuenta"}</button>
+          <div className="auth-div">o</div>
+          <div style={{textAlign:"center",fontSize:13,color:"#64748b"}}>¿Ya tienes cuenta? <button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>Iniciar sesión</button></div>
+        </>}
 
-/* ── SAVE ORDER ── */
-app.post("/orders", auth(), async (req, res) => {
-  try {
-    const { id, contact_id, contact_name, contact_phone, contact_address, contact_city, items, total, payment_method, status } = req.body;
-    await pool.query(
-      `INSERT INTO orders(id,tenant_id,contact_id,contact_name,contact_phone,contact_address,contact_city,items,total,payment_method,status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       ON CONFLICT(id) DO UPDATE SET status=$11,updated_at=NOW()`,
-      [id, req.user.tenant_id, contact_id, contact_name, contact_phone, contact_address, contact_city, JSON.stringify(items), total, payment_method, status]);
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+        {scr==="forgot"&&<>
+          <h2 className="auth-title">Recuperar contraseña</h2>
+          <p className="auth-sub">Te enviaremos un enlace a tu email</p>
+          {err&&<div className="auth-err">{err}</div>}
+          {ok&&<div className="auth-ok">{ok}</div>}
+          <div className="auth-field"><label className="auth-lbl">Email</label><input className="inp" type="email" placeholder="tu@email.com" value={f.email} onChange={e=>s("email",e.target.value)}/></div>
+          <button className="btn btn-g btn-full" onClick={forgot} disabled={loading}>{loading?<span className="spin"/>:"Enviar enlace"}</button>
+          <div style={{textAlign:"center",marginTop:16}}><button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>← Volver al login</button></div>
+        </>}
 
-/* ── GET ORDERS ── */
-app.get("/orders", auth(), async (req, res) => {
-  try {
-    const { month, year, status } = req.query;
-    let q = "SELECT * FROM orders WHERE tenant_id=$1 AND created_at > NOW() - INTERVAL '90 days'";
-    const params = [req.user.tenant_id];
-    if (month && year) {
-      q += ` AND EXTRACT(MONTH FROM created_at)=$${params.length+1} AND EXTRACT(YEAR FROM created_at)=$${params.length+2}`;
-      params.push(month, year);
+        {scr==="confirm"&&<>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:48,marginBottom:16}}>📧</div>
+            <h2 className="auth-title">Revisa tu email</h2>
+            <p className="auth-sub">Haz clic en el enlace que te enviamos para activar tu cuenta.</p>
+            {ok&&<div className="auth-ok" style={{marginTop:16}}>{ok}</div>}
+            <div style={{marginTop:20}}><button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>← Volver al login</button></div>
+          </div>
+        </>}
+
+        <div style={{textAlign:"center",marginTop:24,fontSize:11,color:"#1e2d3d"}}>Powered by Chatiico © 2026</div>
+      </div>
+    </div>
+  );
+};
+
+/* ── ORDER MODAL ── */
+const OrderModal=({order,onClose,onStatus,onPaid,loading})=>{
+  if(!order)return null;
+  const addr=order.shipping_address||{};
+  return(
+    <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal fade">
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <span className="mono" style={{fontSize:12,color:"#25D366"}}>#{order.id.slice(-8)}</span>
+              {order._real&&<span className="badge" style={{background:"#0d2e1c",color:"#25D366",border:"1px solid #25D36618",fontSize:9}}>🔗 LIVE</span>}
+              <SBadge s={order.status}/>
+            </div>
+            <div style={{fontSize:17,fontWeight:700}}>{addr.name||order.user?.full_name||"Cliente"}</div>
+            <div style={{fontSize:11,color:"#64748b",marginTop:3}}>📱 {order.user?.phone||"—"} · ⏱ {fmtTime(order.created_at)}</div>
+          </div>
+          <button onClick={onClose} className="btn btn-h btn-sm"><I.x/></button>
+        </div>
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:10,color:"#4b5563",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Productos</div>
+          {(order.line_items||[]).map(item=>(
+            <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 13px",background:"#111827",borderRadius:9,border:"1px solid #1e2d3d",marginBottom:6}}>
+              <div><div style={{fontSize:13,fontWeight:600}}>{item.name}</div><div style={{fontSize:10,color:"#4b5563"}}>{item.sku} · ×{item.amount}</div></div>
+              <span className="mono" style={{fontSize:13}}>{copRaw(parseFloat(item.price)*parseInt(item.amount||1))}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{background:"#111827",border:"1px solid #1e2d3d",borderRadius:10,padding:"13px 15px",marginBottom:16}}>
+          {[["Subtotal",cop(order.subtotal)],["Envío",cop(order.shipping_cost)],["Impuestos",cop(order.total_taxes)]].map(([l,v])=>(
+            <div key={l} style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:"#4b5563"}}>{l}</span><span className="mono" style={{fontSize:12}}>{v}</span></div>
+          ))}
+          <div style={{borderTop:"1px solid #1e2d3d",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:14,fontWeight:700}}>Total</span>
+            <span className="mono" style={{fontSize:17,fontWeight:700,color:"#25D366"}}>{cop(order.total)}</span>
+          </div>
+          {order.payment_method&&<div style={{marginTop:6,fontSize:11,color:"#4b5563"}}>💳 {order.payment_method}</div>}
+        </div>
+        {addr.address1&&<div style={{padding:"10px 13px",background:"#111827",border:"1px solid #1e2d3d",borderRadius:9,marginBottom:16,fontSize:12,color:"#94a3b8"}}>📍 {addr.address1}{addr.city?`, ${addr.city}`:""}</div>}
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          {order._real&&order.status!=="Delivered"&&order.status!=="Cancelled"&&<button className="btn btn-g btn-sm" onClick={()=>onPaid(order)} disabled={loading}>💰 Marcar Pagado</button>}
+          {SK.filter(s=>s!==order.status).map(s=>(
+            <button key={s} className="btn btn-h btn-sm" onClick={()=>onStatus(order,s)} disabled={loading}>{STATUS[s].icon} {STATUS[s].label}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── KANBAN ── */
+const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
+  const [dragId,setDragId]=useState(null);
+  const [overCol,setOverCol]=useState(null);
+  const by=SK.reduce((a,k)=>({...a,[k]:orders.filter(o=>o.status===k)}),{});
+
+  const drop=async(e,ts)=>{
+    e.preventDefault();setOverCol(null);
+    if(!dragId)return;
+    const order=orders.find(o=>o.id===dragId);
+    if(!order||order.status===ts){setDragId(null);return;}
+    setOrders(p=>p.map(o=>o.id===dragId?{...o,status:ts}:o));setDragId(null);
+    await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ts})});
+    if(order._real&&user?.chatico_token&&user?.flows){
+      const fm={"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled,"Not processed":user.flows.confirmed};
+      const fid=fm[ts];
+      if(fid)await chFetch(`/contacts/${order.user_id}/send/${fid}`,user.chatico_token,{method:"POST"});
     }
-    if (status) { q += ` AND status=$${params.length+1}`; params.push(status); }
-    q += " ORDER BY created_at DESC";
-    const orders = await pool.query(q, params);
-    res.json(orders.rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+    addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.shipping_address?.name||"Pedido"} → ${STATUS[ts].label}`});
+  };
 
-/* ── UPDATE ORDER STATUS ── */
-app.put("/orders/:id/status", auth(), async (req, res) => {
-  try {
-    const { status } = req.body;
-    await pool.query("UPDATE orders SET status=$1,updated_at=NOW() WHERE id=$2 AND tenant_id=$3",
-      [status, req.params.id, req.user.tenant_id]);
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-/* ── EXPORT ORDERS CSV ── */
-app.get("/orders/export", auth(), async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    let q = "SELECT * FROM orders WHERE tenant_id=$1 AND created_at > NOW() - INTERVAL '90 days'";
-    const params = [req.user.tenant_id];
-    if (month && year) {
-      q += ` AND EXTRACT(MONTH FROM created_at)=$2 AND EXTRACT(YEAR FROM created_at)=$3`;
-      params.push(month, year);
-    }
-    q += " ORDER BY created_at DESC";
-    const orders = await pool.query(q, params);
-    const csv = ["ID,Cliente,Teléfono,Dirección,Total,Pago,Estado,Fecha",
-      ...orders.rows.map(o => `${o.id},"${o.contact_name}","${o.contact_phone}","${o.contact_address}",${o.total/100},"${o.payment_method}","${o.status}","${o.created_at}"`)
-    ].join("\n");
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment;filename=pedidos_${month||"todos"}_${year||""}.csv`);
-    res.send(csv);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  return(
+    <div className="krow">
+      {SK.map(sk=>(
+        <div key={sk} className={`kcol${overCol===sk?" ov":""}`}
+          onDragOver={e=>{e.preventDefault();setOverCol(sk);}} onDragLeave={()=>setOverCol(null)} onDrop={e=>drop(e,sk)}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15}}>{STATUS[sk].icon}</span><span style={{fontSize:11,fontWeight:700,color:STATUS[sk].col}}>{STATUS[sk].label}</span></div>
+            <span className="mono badge" style={{background:"#111827",border:"1px solid #1e2d3d",fontSize:10,color:"#4b5563"}}>{by[sk].length}</span>
+          </div>
+          <div style={{height:2,background:STATUS[sk].col+"28",borderRadius:2,flexShrink:0,marginTop:-2}}/>
+          <div className="kbody">
+            {by[sk].length===0&&<div style={{textAlign:"center",color:"#1e2d3d",fontSize:11,padding:"18px 0",border:"2px dashed #1a2236",borderRadius:8,marginTop:2}}>Sin pedidos</div>}
+            {by[sk].map(order=>(
+              <div key={order.id} className={`kcard${dragId===order.id?" drag":""}`}
+                draggable onDragStart={e=>{setDragId(order.id);e.dataTransfer.effectAllowed="move";}} onDragEnd={()=>setDragId(null)} onClick={()=>openOrder(order)}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
+                  <span className="mono" style={{fontSize:10,color:"#25D366"}}>#{order.id.slice(-6)}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    {order._real&&<span style={{fontSize:9,background:"#0d2e1c",color:"#25D366",padding:"1px 5px",borderRadius:4}}>LIVE</span>}
+                    <span className="mono" style={{fontSize:10,color:"#374151"}}>{fmtTime(order.created_at)}</span>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
+                  <Av name={order.shipping_address?.name||order.user?.full_name||"?"} size={27}/>
+                  <div><div style={{fontSize:12,fontWeight:700,lineHeight:1.2}}>{order.shipping_address?.name||order.user?.full_name}</div><div style={{fontSize:10,color:"#4b5563"}}>{order.shipping_address?.city||"—"}</div></div>
+                </div>
+                <div style={{marginBottom:9}}>
+                  {(order.line_items||[]).slice(0,3).map((item,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",marginBottom:1}}>
+                      <span>×{item.amount} {item.name}</span><span className="mono">{copRaw(parseFloat(item.price)*parseInt(item.amount||1))}</span>
+                    </div>
+                  ))}
+                  {(order.line_items||[]).length>3&&<div style={{fontSize:10,color:"#374151"}}>+{order.line_items.length-3} más</div>}
+                </div>
+                <div style={{borderTop:"1px solid #1e2d3d",paddingTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span className="mono" style={{fontSize:13,fontWeight:700}}>{cop(order.total)}</span>
+                  {order.payment_method&&<span className="badge" style={{background:"#1e2d3d",color:"#64748b",fontSize:9}}>{order.payment_method}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /* ── ANALYTICS ── */
-app.get("/analytics", auth(), async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    let where = "WHERE tenant_id=$1 AND created_at > NOW() - INTERVAL '90 days'";
-    const params = [req.user.tenant_id];
-    if (month && year) {
-      where += ` AND EXTRACT(MONTH FROM created_at)=$2 AND EXTRACT(YEAR FROM created_at)=$3`;
-      params.push(month, year);
+const AnalyticsView=({orders})=>{
+  const [month,setMonth]=useState("");
+  const delivered=orders.filter(o=>o.status==="Delivered");
+  const cancelled=orders.filter(o=>o.status==="Cancelled");
+  const totalRev=orders.reduce((s,o)=>s+(o.total||0),0);
+  const avg=orders.length?Math.floor(totalRev/orders.length):0;
+
+  const exportCSV=async(type)=>{
+    const q=month?`?month=${month.split("-")[1]}&year=${month.split("-")[0]}`:"";
+    const r=await fetch(`${API_BASE}/${type}/export${q}`,{headers:authH()});
+    const blob=await r.blob();
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`${type}.csv`;a.click();
+  };
+
+  return(
+    <div className="fade">
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+        <div><label style={{fontSize:11,color:"#64748b",marginRight:8}}>Mes:</label><input type="month" className="inp" style={{width:"auto",padding:"6px 12px"}} value={month} onChange={e=>setMonth(e.target.value)}/></div>
+        <button className="btn btn-h btn-sm" onClick={()=>exportCSV("orders")}>📥 Pedidos CSV</button>
+        <button className="btn btn-h btn-sm" onClick={()=>exportCSV("analytics")}>📊 Analíticas CSV</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:20}}>
+        {[{label:"Ventas",val:cop(totalRev),sub:`${orders.length} pedidos`,icon:"💰",col:"#25D366"},{label:"Ticket prom.",val:cop(avg),sub:"por pedido",icon:"🎯",col:"#3b82f6"},{label:"Entregados",val:delivered.length,sub:`de ${orders.length}`,icon:"✅",col:"#22c55e"},{label:"Cancelados",val:cancelled.length,sub:`${((cancelled.length/Math.max(orders.length,1))*100).toFixed(0)}%`,icon:"❌",col:"#ef4444"}].map((k,i)=>(
+          <div key={i} className="stat">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}><span style={{fontSize:10,color:"#4b5563",fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>{k.label}</span><span style={{fontSize:18}}>{k.icon}</span></div>
+            <div className="mono" style={{fontSize:20,fontWeight:700,color:k.col,marginBottom:3}}>{k.val}</div>
+            <div style={{fontSize:11,color:"#374151"}}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14,marginBottom:14}}>
+        <div className="card" style={{padding:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4b5563",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Ventas semanales</div>
+          <ResponsiveContainer width="100%" height={190}>
+            <AreaChart data={WEEKLY}><defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#25D366" stopOpacity={.25}/><stop offset="95%" stopColor="#25D366" stopOpacity={0}/></linearGradient></defs>
+              <XAxis dataKey="d" tick={{fontSize:10,fill:"#374151",fontFamily:"DM Mono"}} axisLine={false} tickLine={false}/><YAxis hide/><Tooltip content={<CTip/>}/>
+              <Area type="monotone" dataKey="v" stroke="#25D366" strokeWidth={2} fill="url(#gv)"/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="card" style={{padding:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4b5563",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Métodos de pago</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:14}}><PieChart width={130} height={130}><Pie data={PAYS} dataKey="pct" cx="50%" cy="50%" outerRadius={62} innerRadius={38} strokeWidth={0}>{PAYS.map((p,i)=><Cell key={i} fill={p.color}/>)}</Pie></PieChart></div>
+          {PAYS.map((p,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}><div style={{display:"flex",alignItems:"center",gap:7}}><div style={{width:8,height:8,borderRadius:2,background:p.color}}/><span style={{fontSize:12,color:"#94a3b8"}}>{p.name}</span></div><span className="mono" style={{fontSize:12}}>{p.pct}%</span></div>)}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
+        <div className="card" style={{padding:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4b5563",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Pedidos por día</div>
+          <ResponsiveContainer width="100%" height={170}><BarChart data={WEEKLY} barSize={16}><XAxis dataKey="d" tick={{fontSize:10,fill:"#374151",fontFamily:"DM Mono"}} axisLine={false} tickLine={false}/><YAxis hide/><Tooltip content={<CTip/>}/><Bar dataKey="p" fill="#3b82f6" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
+        </div>
+        <div className="card" style={{padding:18}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4b5563",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Top productos</div>
+          {TOPROD.map((p,i)=>(
+            <div key={i} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:"#94a3b8"}}>{p.name}</span><span className="mono" style={{fontSize:11,color:"#4b5563"}}>{p.qty}</span></div>
+              <div style={{height:4,background:"#1a2742",borderRadius:2}}><div style={{height:"100%",width:`${(p.qty/34)*100}%`,background:"#25D366",borderRadius:2}}/></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── USERS ── */
+const UsersView=({user,addToast})=>{
+  const [users,setUsers]=useState([]);
+  const [showInv,setShowInv]=useState(false);
+  const [f,setF]=useState({name:"",email:""});
+  const [loading,setLoading]=useState(false);
+
+  useEffect(()=>{if(user.role==="admin")apiFetch("/users").then(r=>r&&setUsers(r));},[]);
+
+  const invite=async()=>{
+    setLoading(true);
+    const r=await apiFetch("/users/invite",{method:"POST",body:JSON.stringify(f)});
+    setLoading(false);
+    if(r?.success){addToast({icon:"📧",title:"Invitación enviada",msg:f.email});setShowInv(false);setF({name:"",email:""});apiFetch("/users").then(r=>r&&setUsers(r));}
+    else addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo invitar"});
+  };
+
+  if(user.role!=="admin")return<div className="fade" style={{textAlign:"center",padding:"60px 20px",color:"#4b5563"}}><div style={{fontSize:40,marginBottom:12}}>🔒</div><div>Solo administradores pueden gestionar usuarios</div></div>;
+
+  return(
+    <div className="fade" style={{maxWidth:700,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:16,fontWeight:700}}>Equipo — {users.length} usuarios</div>
+        <button className="btn btn-g btn-sm" onClick={()=>setShowInv(!showInv)}>+ Invitar Agente</button>
+      </div>
+      {showInv&&<div className="card" style={{padding:18,marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:14}}>Invitar agente</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5}}>Nombre</label><input className="inp" placeholder="Nombre" value={f.name} onChange={e=>setF(p=>({...p,name:e.target.value}))}/></div>
+          <div><label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5}}>Email</label><input className="inp" type="email" placeholder="agente@email.com" value={f.email} onChange={e=>setF(p=>({...p,email:e.target.value}))}/></div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-g btn-sm" onClick={invite} disabled={loading}>{loading?<span className="spin"/>:"Enviar invitación"}</button>
+          <button className="btn btn-h btn-sm" onClick={()=>setShowInv(false)}>Cancelar</button>
+        </div>
+      </div>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {users.map((u,i)=>(
+          <div key={i} className="card" style={{padding:16,display:"flex",alignItems:"center",gap:14}}>
+            <Av name={u.name} size={40}/>
+            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700}}>{u.name}</div><div style={{fontSize:12,color:"#4b5563"}}>{u.email}</div></div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span className="badge" style={{background:u.role==="admin"?"#0f2748":"#1a2236",color:u.role==="admin"?"#3b82f6":"#64748b",border:"none"}}>{u.role==="admin"?"👑 Admin":"👤 Agente"}</span>
+              <span className="badge" style={{background:u.confirmed?"#052612":"#3c0a0a",color:u.confirmed?"#22c55e":"#ef4444",border:"none"}}>{u.confirmed?"✅ Activo":"⏳ Pendiente"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ── SETTINGS ── */
+const SettingsView=({user,setUser,addToast})=>{
+  const [cfg,setCfg]=useState({chatico_token:user.chatico_token||"",flow_confirmed:user.flows?.confirmed||"",flow_processing:user.flows?.processing||"",flow_shipped:user.flows?.shipped||"",flow_delivered:user.flows?.delivered||"",flow_cancelled:user.flows?.cancelled||""});
+  const [loading,setLoading]=useState(false);
+
+  const save=async()=>{
+    setLoading(true);
+    const r=await apiFetch("/config",{method:"PUT",body:JSON.stringify(cfg)});
+    setLoading(false);
+    if(r?.success){
+      const nu={...user,chatico_token:cfg.chatico_token,flows:{confirmed:cfg.flow_confirmed,processing:cfg.flow_processing,shipped:cfg.flow_shipped,delivered:cfg.flow_delivered,cancelled:cfg.flow_cancelled}};
+      localStorage.setItem("cht_user",JSON.stringify(nu));setUser(nu);
+      addToast({icon:"💾",title:"Guardado",msg:"Configuración actualizada"});
+    }else addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo guardar"});
+  };
+
+  return(
+    <div className="fade" style={{maxWidth:680,margin:"0 auto",display:"flex",flexDirection:"column",gap:14}}>
+      <div className="card" style={{padding:20}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:15,color:"#25D366"}}>🔗 Token de Chatico</div>
+        <div style={{marginBottom:12}}><label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5}}>X-ACCESS-TOKEN</label><input className="inp" style={{fontFamily:"DM Mono",fontSize:12}} placeholder="5888091.xxxxxxxxxx" value={cfg.chatico_token} onChange={e=>setCfg(p=>({...p,chatico_token:e.target.value}))}/></div>
+        <div style={{fontSize:11,color:"#4b5563",background:"#111827",border:"1px solid #1e2d3d",borderRadius:8,padding:"10px 13px"}}>💡 Encuéntralo en <strong style={{color:"#25D366"}}>app.chatico.io → Configuración → API</strong></div>
+      </div>
+      <div className="card" style={{padding:20}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:6}}>📱 Flow IDs de WhatsApp</div>
+        <div style={{fontSize:12,color:"#4b5563",marginBottom:16}}>ID del flujo que se envía al cliente cuando cambia el estado del pedido.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {[["flow_confirmed","✅ Confirmado"],["flow_processing","🔥 En Preparación"],["flow_shipped","🛵 Enviado"],["flow_delivered","🎉 Entregado"],["flow_cancelled","❌ Cancelado"]].map(([key,label])=>(
+            <div key={key}><label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5}}>{label}</label><input className="inp" style={{fontFamily:"DM Mono",fontSize:12}} placeholder="Flow ID" value={cfg[key]} onChange={e=>setCfg(p=>({...p,[key]:e.target.value}))}/></div>
+          ))}
+        </div>
+        <div style={{marginTop:16}}><button className="btn btn-g" onClick={save} disabled={loading}>{loading?<span className="spin"/>:"💾 Guardar"}</button></div>
+      </div>
+      <div className="card" style={{padding:20}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:15}}>👤 Mi cuenta</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[["Nombre",user.name],["Email",user.email],["Negocio",user.business],["Rol",user.role==="admin"?"Administrador":"Agente"]].map(([k,v])=>(
+            <div key={k} style={{padding:"10px 13px",background:"#111827",borderRadius:8,border:"1px solid #1e2d3d"}}><div style={{fontSize:10,color:"#4b5563",marginBottom:3}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── ROOT ── */
+export default function App(){
+  const [user,setUser]=useState(null);
+  const [ready,setReady]=useState(false);
+  const [view,setView]=useState("pipeline");
+  const [orders,setOrders]=useState([]);
+  const [selOrder,setSelOrder]=useState(null);
+  const [toasts,setToasts]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [time,setTime]=useState(new Date());
+  const tid=useRef(0);
+
+  useEffect(()=>{let el=document.getElementById("__os");if(!el){el=document.createElement("style");el.id="__os";document.head.appendChild(el);}el.textContent=CSS;},[]);
+  useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t);},[]);
+
+  useEffect(()=>{
+    const token=getToken();const u=getUser();
+    if(token&&u){setUser(u);loadOrders(u);}
+    setReady(true);
+  },[]);
+
+  const loadOrders=async(u)=>{
+    const token=u?.chatico_token;
+    if(!token)return;
+    const order=await chFetch("/contacts/573046097929/order/5610709923077827042",token);
+    if(order?.id)setOrders([{...order,_real:true}]);
+    const db=await apiFetch("/orders");
+    if(db?.length)setOrders(prev=>{const ids=new Set(prev.map(o=>o.id));return[...prev,...db.filter(o=>!ids.has(o.id))];});
+  };
+
+  const handleLogin=(u)=>{setUser(u);loadOrders(u);};
+  const handleLogout=()=>{localStorage.removeItem("cht_token");localStorage.removeItem("cht_user");setUser(null);setOrders([]);};
+
+  const addToast=useCallback(({icon,title,msg})=>{const id=++tid.current;setToasts(p=>[...p,{id,icon,title,msg}]);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),4500);},[]);
+
+  const onStatus=async(order,ns)=>{
+    setOrders(p=>p.map(o=>o.id===order.id?{...o,status:ns}:o));setSelOrder(null);
+    await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ns})});
+    if(order._real&&user?.chatico_token&&user?.flows){
+      const fm={"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled,"Not processed":user.flows.confirmed};
+      const fid=fm[ns];if(fid)await chFetch(`/contacts/${order.user_id}/send/${fid}`,user.chatico_token,{method:"POST"});
     }
-    const [totals, byStatus, daily] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as total, SUM(total) as revenue, AVG(total) as avg_ticket FROM orders ${where}`, params),
-      pool.query(`SELECT status, COUNT(*) as count FROM orders ${where} GROUP BY status`, params),
-      pool.query(`SELECT DATE(created_at) as day, COUNT(*) as orders, SUM(total) as revenue FROM orders ${where} GROUP BY DATE(created_at) ORDER BY day DESC LIMIT 30`, params),
-    ]);
-    res.json({ totals: totals.rows[0], byStatus: byStatus.rows, daily: daily.rows });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+    addToast({icon:STATUS[ns].icon,title:"Estado actualizado",msg:`${STATUS[ns].label} — WhatsApp enviado ✓`});
+  };
 
-/* ── EXPORT ANALYTICS CSV ── */
-app.get("/analytics/export", auth(), async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    let where = "WHERE tenant_id=$1 AND created_at > NOW() - INTERVAL '90 days'";
-    const params = [req.user.tenant_id];
-    if (month && year) {
-      where += ` AND EXTRACT(MONTH FROM created_at)=$2 AND EXTRACT(YEAR FROM created_at)=$3`;
-      params.push(month, year);
-    }
-    const daily = await pool.query(
-      `SELECT DATE(created_at) as dia, COUNT(*) as pedidos, SUM(total)/100 as ingresos, AVG(total)/100 as ticket_promedio
-       FROM orders ${where} GROUP BY DATE(created_at) ORDER BY dia DESC`, params);
-    const csv = ["Día,Pedidos,Ingresos COP,Ticket Promedio",
-      ...daily.rows.map(r => `${r.dia},${r.pedidos},${r.ingresos},${Math.round(r.ticket_promedio)}`)
-    ].join("\n");
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment;filename=analiticas_${month||"todos"}.csv`);
-    res.send(csv);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+  const onPaid=async(order)=>{
+    setSelOrder(null);setLoading(true);
+    const r=await chFetch(`/contacts/${order.user_id}/pay/${order.id}`,user.chatico_token,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({amount_received:order.total})});
+    setLoading(false);
+    addToast(r?.success?{icon:"💰",title:"Pago registrado",msg:cop(order.total)}:{icon:"⚠️",title:"Error",msg:r?.error?.message||"No se pudo registrar"});
+  };
 
-/* ── HEALTH ── */
-app.get("/health", (req, res) => res.json({ status: "ok", time: new Date() }));
+  if(!ready)return<div style={{background:"#060a12",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><span className="spin" style={{width:32,height:32,borderWidth:3}}/></div>;
+  if(!user)return<AuthScreen onLogin={handleLogin}/>;
 
-app.listen(process.env.PORT, () => console.log(`API Chatiico corriendo en puerto ${process.env.PORT}`));
+  const NAVS=[{id:"pipeline",label:"Pedidos",I:I.pipe},{id:"analytics",label:"Analíticas",I:I.chart},{id:"users",label:"Equipo",I:I.users},{id:"settings",label:"Config",I:I.cog}];
+  const pending=orders.filter(o=>o.status==="Not processed").length;
+  const todayRev=orders.reduce((s,o)=>s+(o.total||0),0);
+
+  return(
+    <div className="os" style={{position:"relative"}}>
+      <nav className="sidebar">
+        <div style={{width:40,height:40,borderRadius:10,background:"#060a12",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8,overflow:"hidden",flexShrink:0}}>
+          <img src={LOGO} style={{width:38,height:"auto",objectFit:"contain"}} alt="Chatiico"/>
+        </div>
+        {NAVS.map(({id,label,I:Ic})=>(
+          <button key={id} className={`navbtn${view===id?" on":""}`} onClick={()=>setView(id)} title={label}>{Ic(view===id?"#25D366":"#4b5563")}</button>
+        ))}
+        <div style={{flex:1}}/>
+        <button className="navbtn" onClick={handleLogout} title="Cerrar sesión"><I.out/></button>
+      </nav>
+      <div className="main">
+        <header className="hdr">
+          <div className="dot"/>
+          <span style={{fontSize:13,fontWeight:700}}>{NAVS.find(n=>n.id===view)?.label}</span>
+          <span style={{fontSize:11,color:"#374151"}}>{view==="pipeline"?`· ${orders.length} pedidos`:view==="analytics"?`· ${time.toLocaleDateString("es-CO")}`:""}</span>
+          <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+            <span className="mono" style={{fontSize:11,color:"#374151"}}>{time.toLocaleTimeString("es-CO")}</span>
+            <span className="mono" style={{fontSize:12,color:"#25D366",background:"#0d2e1c",padding:"4px 10px",borderRadius:8,border:"1px solid #25D36618"}}>{cop(todayRev)}</span>
+            {pending>0&&<span style={{background:"#f59e0b",color:"#000",fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:8}}>{pending} nuevo{pending>1?"s":""}</span>}
+            <Av name={user.name} size={30}/>
+          </div>
+        </header>
+        <div className={`body${view==="pipeline"?" kb":""}`} style={{height:view==="pipeline"?"calc(100vh - 56px)":undefined}}>
+          {view==="pipeline"  &&<KanbanView orders={orders} setOrders={setOrders} openOrder={setSelOrder} addToast={addToast} user={user}/>}
+          {view==="analytics" &&<AnalyticsView orders={orders}/>}
+          {view==="users"     &&<UsersView user={user} addToast={addToast}/>}
+          {view==="settings"  &&<SettingsView user={user} setUser={setUser} addToast={addToast}/>}
+        </div>
+      </div>
+      {selOrder&&<OrderModal order={selOrder} onClose={()=>setSelOrder(null)} onStatus={onStatus} onPaid={onPaid} loading={loading}/>}
+      <div className="toast-wrap">
+        {toasts.map(t=>(
+          <div key={t.id} className="toast">
+            <span style={{fontSize:18,flexShrink:0}}>{t.icon||"🔔"}</span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#dde6f0",marginBottom:2}}>{t.title}</div><div style={{fontSize:12,color:"#4b5563"}}>{t.msg}</div></div>
+            <button onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))} className="btn" style={{background:"transparent",border:"none",color:"#4b5563",padding:0}}><I.x/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
