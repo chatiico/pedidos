@@ -519,18 +519,25 @@ export default function App(){
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t);},[]);
 
   useEffect(()=>{
+    if(!user) return;
+    const t=setInterval(()=>loadOrders(user),30000);
+    return()=>clearInterval(t);
+  },[user]);
+
+  useEffect(()=>{
     const token=getToken();const u=getUser();
     if(token&&u){setUser(u);loadOrders(u);}
     setReady(true);
   },[]);
 
   const loadOrders=async(u)=>{
-    const token=u?.chatico_token;
-    if(!token)return;
-    const order=await chFetch("/contacts/573046097929/order/5610709923077827042",token);
-    if(order?.id)setOrders([{...order,_real:true}]);
     const db=await apiFetch("/orders");
-    if(db?.length)setOrders(prev=>{const ids=new Set(prev.map(o=>o.id));return[...prev,...db.filter(o=>!ids.has(o.id))];});
+    if(db?.length)setOrders(db.map(o=>({...o,
+      line_items:typeof o.items==="string"?JSON.parse(o.items):o.items||[],
+      shipping_address:{name:o.contact_name,phone:o.contact_phone,address1:o.contact_address,city:o.contact_city},
+      user:{full_name:o.contact_name,phone:o.contact_phone},
+      _real:true
+    })));
   };
 
   const handleLogin=(u)=>{setUser(u);loadOrders(u);};
