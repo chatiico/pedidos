@@ -325,14 +325,10 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
     const order=orders.find(o=>o.id===dragId);
     if(!order||order.status===ts){setDragId(null);return;}
     setOrders(p=>p.map(o=>o.id===dragId?{...o,status:ts}:o));setDragId(null);
+    
+    // Solo actualizar el status, el backend envía el flow automáticamente
     await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ts})});
-    if(order._real&&user?.chatico_token&&user?.flows){
-      const fm={"Not processed":user.flows.confirmed,"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled};
-      const fid=fm[ts];
-      if(fid&&order.contact_id){
-        await chFetch(`/contacts/${order.contact_id}/send/${fid}`,user.chatico_token,{method:"POST"});
-      }
-    }
+    
     addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ts].label}`});
   };
 
