@@ -154,7 +154,7 @@ const AuthScreen=({onLogin})=>{
 
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
-    if(p.get("confirmed")){setOk("✅ Email confirmado. Ya puedes iniciar sesión.");setScr("login");}
+    if(p.get("confirmed")){setTimeout(()=>setScr("login"),1500);}
     if(p.get("error")){setErr("❌ Link inválido o expirado.");}
   },[]);
 
@@ -327,9 +327,11 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
     setOrders(p=>p.map(o=>o.id===dragId?{...o,status:ts}:o));setDragId(null);
     await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ts})});
     if(order._real&&user?.chatico_token&&user?.flows){
-      const fm={"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled,"Not processed":user.flows.confirmed};
+      const fm={"Not processed":user.flows.confirmed,"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled};
       const fid=fm[ts];
-      if(fid)await chFetch(`/contacts/${order.user_id}/send/${fid}`,user.chatico_token,{method:"POST"});
+      if(fid&&order.contact_id){
+        await chFetch(`/contacts/${order.contact_id}/send/${fid}`,user.chatico_token,{method:"POST"});
+      }
     }
     addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ts].label}`});
   };
@@ -503,10 +505,12 @@ const UsersView=({user,addToast})=>{
   useEffect(()=>{if(user.role==="admin")apiFetch("/users").then(r=>r&&setUsers(r));},[]);
 
   const invite=async()=>{
+    if(!f.name||!f.email)return;
     setLoading(true);
-    const r=await apiFetch("/users/invite",{method:"POST",body:JSON.stringify(f)});
+    const pass=Math.random().toString(36).slice(-10);
+    const r=await apiFetch("/users/invite",{method:"POST",body:JSON.stringify({name:f.name,email:f.email,password:pass})});
     setLoading(false);
-    if(r?.success){addToast({icon:"📧",title:"Invitación enviada",msg:f.email});setShowInv(false);setF({name:"",email:""});apiFetch("/users").then(r=>r&&setUsers(r));}
+    if(r?.success){addToast({icon:"📧",title:"Agente invitado",msg:`${f.email}\nContraseña: ${pass}`});setShowInv(false);setF({name:"",email:""});apiFetch("/users").then(r=>r&&setUsers(r));}
     else addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo invitar"});
   };
 
@@ -595,7 +599,7 @@ const SettingsView=({user,setUser,addToast,setOrders})=>{
             if(r?.success){addToast({icon:"🗑️",title:"Pedidos eliminados",msg:"Todos los pedidos fueron borrados"});setOrders([]);}
             else addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo limpiar"});
           }
-        }}>🗑️ Limpiar todos los pedidos</button>
+        }}>🗑️ Eliminar todos los pedidos</button>
       </div>
     </div>
   );
@@ -648,8 +652,11 @@ export default function App(){
     setOrders(p=>p.map(o=>o.id===order.id?{...o,status:ns}:o));setSelOrder(null);
     await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ns})});
     if(order._real&&user?.chatico_token&&user?.flows){
-      const fm={"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled,"Not processed":user.flows.confirmed};
-      const fid=fm[ns];if(fid)await chFetch(`/contacts/${order.user_id}/send/${fid}`,user.chatico_token,{method:"POST"});
+      const fm={"Not processed":user.flows.confirmed,"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled};
+      const fid=fm[ns];
+      if(fid&&order.contact_id){
+        await chFetch(`/contacts/${order.contact_id}/send/${fid}`,user.chatico_token,{method:"POST"});
+      }
     }
     addToast({icon:STATUS[ns].icon,title:"Estado actualizado",msg:`${STATUS[ns].label} — WhatsApp enviado ✓`});
   };
