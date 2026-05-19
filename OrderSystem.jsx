@@ -52,14 +52,21 @@ const CSS=`
 .navbtn.on::before{content:'';position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:20px;background:#25D366;border-radius:0 3px 3px 0;}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .hdr{background:#0a0f1c;border-bottom:1px solid #1a2236;padding:0 22px;height:56px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
-.body{flex:1;overflow-y:auto;padding:20px;}.body.kb{overflow-y:hidden;overflow-x:auto;}
+.body{flex:1;overflow-y:auto;padding:20px;}.body.kb{overflow-y:hidden;overflow-x:auto;background:#f8fafc;}
 .card{background:#0d1526;border:1px solid #1a2742;border-radius:14px;}
-.krow{display:flex;gap:14px;height:100%;padding-bottom:8px;}
-.kcol{background:#0a0f1c;border:1px solid #1a2236;border-radius:14px;padding:13px;width:265px;min-width:265px;display:flex;flex-direction:column;gap:8px;max-height:100%;}
-.kcol.ov{border-color:#25D36650;background:#25D36606;}
-.kbody{display:flex;flex-direction:column;gap:9px;overflow-y:auto;flex:1;}
-.kcard{background:#111827;border:1px solid #1e2d3d;border-radius:10px;padding:12px;cursor:grab;transition:transform .15s,box-shadow .15s,border-color .15s;}
-.kcard:hover{border-color:#25D36635;transform:translateY(-2px);box-shadow:0 6px 20px #00000050;}
+.krow{display:flex;gap:12px;height:100%;padding-bottom:8px;}
+.kcol{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:14px;padding:12px;width:275px;min-width:275px;display:flex;flex-direction:column;gap:8px;max-height:100%;}
+.kcol.ov{border-color:#25D36650;background:#f0fdf4;}
+.kbody{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;}
+.kbody::-webkit-scrollbar{width:2px;}.kbody::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px;}
+.kcard{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:grab;transition:transform .15s,box-shadow .15s,border-color .15s;position:relative;overflow:hidden;}
+.kcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.kcard[data-status="Not processed"]::before{background:#3b82f6;}
+.kcard[data-status="Processing"]::before{background:#f59e0b;}
+.kcard[data-status="Shipped"]::before{background:#8b5cf6;}
+.kcard[data-status="Delivered"]::before{background:#22c55e;}
+.kcard[data-status="Cancelled"]::before{background:#ef4444;}
+.kcard:hover{border-color:#cbd5e1;transform:translateY(-2px);box-shadow:0 4px 16px #00000015;}
 .kcard.drag{opacity:.35;cursor:grabbing;}
 .btn{border:none;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;transition:all .18s;font-size:12px;display:inline-flex;align-items:center;gap:5px;}
 .btn-g{background:#25D366;color:#000;padding:7px 14px;}.btn-g:hover{background:#1dba58;}.btn-g:disabled{background:#1a4d33;color:#4b5563;cursor:not-allowed;}
@@ -276,7 +283,20 @@ const OrderModal=({order,onClose,onStatus,onPaid,loading})=>{
 const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
   const [dragId,setDragId]=useState(null);
   const [overCol,setOverCol]=useState(null);
-  const by=SK.reduce((a,k)=>({...a,[k]:orders.filter(o=>o.status===k)}),{});
+  const [search,setSearch]=useState("");
+
+  const timeAgo=(iso)=>{
+    if(!iso) return "—";
+    const diff=Math.floor((Date.now()-new Date(iso))/60000);
+    if(diff<60) return `${diff}min`;
+    if(diff<1440) return `${Math.floor(diff/60)}h`;
+    return `${Math.floor(diff/1440)}d`;
+  };
+
+  const filtered=(sk)=>orders.filter(o=>o.status===sk&&(
+    !search||(o.contact_name||o.shipping_address?.name||"").toLowerCase().includes(search.toLowerCase())
+  ));
+  const colTotal=(sk)=>orders.filter(o=>o.status===sk).reduce((s,o)=>s+(o.total||0),0);
 
   const drop=async(e,ts)=>{
     e.preventDefault();setOverCol(null);
@@ -290,52 +310,98 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
       const fid=fm[ts];
       if(fid)await chFetch(`/contacts/${order.user_id}/send/${fid}`,user.chatico_token,{method:"POST"});
     }
-    addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.shipping_address?.name||"Pedido"} → ${STATUS[ts].label}`});
+    addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ts].label}`});
   };
 
   return(
-    <div className="krow">
-      {SK.map(sk=>(
-        <div key={sk} className={`kcol${overCol===sk?" ov":""}`}
-          onDragOver={e=>{e.preventDefault();setOverCol(sk);}} onDragLeave={()=>setOverCol(null)} onDrop={e=>drop(e,sk)}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:15}}>{STATUS[sk].icon}</span><span style={{fontSize:11,fontWeight:700,color:STATUS[sk].col}}>{STATUS[sk].label}</span></div>
-            <span className="mono badge" style={{background:"#111827",border:"1px solid #1e2d3d",fontSize:10,color:"#4b5563"}}>{by[sk].length}</span>
-          </div>
-          <div style={{height:2,background:STATUS[sk].col+"28",borderRadius:2,flexShrink:0,marginTop:-2}}/>
-          <div className="kbody">
-            {by[sk].length===0&&<div style={{textAlign:"center",color:"#1e2d3d",fontSize:11,padding:"18px 0",border:"2px dashed #1a2236",borderRadius:8,marginTop:2}}>Sin pedidos</div>}
-            {by[sk].map(order=>(
-              <div key={order.id} className={`kcard${dragId===order.id?" drag":""}`}
-                draggable onDragStart={e=>{setDragId(order.id);e.dataTransfer.effectAllowed="move";}} onDragEnd={()=>setDragId(null)} onClick={()=>openOrder(order)}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-                  <span className="mono" style={{fontSize:10,color:"#25D366"}}>#{order.id.slice(-6)}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    {order._real&&<span style={{fontSize:9,background:"#0d2e1c",color:"#25D366",padding:"1px 5px",borderRadius:4}}>LIVE</span>}
-                    <span className="mono" style={{fontSize:10,color:"#374151"}}>{fmtTime(order.created_at)}</span>
-                  </div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
-                  <Av name={order.shipping_address?.name||order.user?.full_name||"?"} size={27}/>
-                  <div><div style={{fontSize:12,fontWeight:700,lineHeight:1.2}}>{order.shipping_address?.name||order.user?.full_name}</div><div style={{fontSize:10,color:"#4b5563"}}>{order.shipping_address?.city||"—"}</div></div>
-                </div>
-                <div style={{marginBottom:9}}>
-                  {(order.line_items||[]).slice(0,3).map((item,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",marginBottom:1}}>
-                      <span>×{item.amount} {item.name}</span><span className="mono">{copRaw(parseFloat(item.price)*parseInt(item.amount||1))}</span>
-                    </div>
-                  ))}
-                  {(order.line_items||[]).length>3&&<div style={{fontSize:10,color:"#374151"}}>+{order.line_items.length-3} más</div>}
-                </div>
-                <div style={{borderTop:"1px solid #1e2d3d",paddingTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span className="mono" style={{fontSize:13,fontWeight:700}}>{cop(order.total)}</span>
-                  {order.payment_method&&<span className="badge" style={{background:"#1e2d3d",color:"#64748b",fontSize:9}}>{order.payment_method}</span>}
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      {/* Search bar */}
+      <div style={{padding:"10px 20px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
+        <div style={{position:"relative",flex:1,maxWidth:300}}>
+          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#94a3b8"}}>🔍</span>
+          <input className="inp" style={{paddingLeft:32,background:"#fff",border:"1px solid #e2e8f0",color:"#1e293b",fontSize:13,height:36}} placeholder="Buscar cliente..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <span style={{fontSize:12,color:"#64748b"}}>{orders.length} pedidos · {cop(orders.reduce((s,o)=>s+(o.total||0),0))} total</span>
+      </div>
+
+      <div className="krow" style={{padding:"14px 20px",flex:1,overflow:"hidden"}}>
+        {SK.map(sk=>(
+          <div key={sk} className={`kcol${overCol===sk?" ov":""}`}
+            onDragOver={e=>{e.preventDefault();setOverCol(sk);}} onDragLeave={()=>setOverCol(null)} onDrop={e=>drop(e,sk)}>
+
+            {/* Column header */}
+            <div style={{flexShrink:0,paddingBottom:4}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{STATUS[sk].label}</span>
+                  <span style={{background:STATUS[sk].col+"18",color:STATUS[sk].col,fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:10,border:`1px solid ${STATUS[sk].col}30`}}>{filtered(sk).length}</span>
                 </div>
               </div>
-            ))}
+              <div style={{fontSize:12,color:"#64748b",fontFamily:"DM Mono",marginBottom:8}}>{cop(colTotal(sk))}</div>
+              <div style={{height:3,background:STATUS[sk].col,borderRadius:2}}/>
+            </div>
+
+            <div className="kbody">
+              {filtered(sk).length===0&&(
+                <div style={{textAlign:"center",color:"#cbd5e1",fontSize:12,padding:"24px 0",border:"2px dashed #e2e8f0",borderRadius:8,marginTop:2}}>Sin pedidos</div>
+              )}
+              {filtered(sk).map(order=>{
+                const name=order.contact_name||order.shipping_address?.name||"Cliente";
+                const phone=order.contact_phone||order.user?.phone||"";
+                const items=typeof order.items==="string"?JSON.parse(order.items||"[]"):(order.line_items||order.items||[]);
+                const ago=timeAgo(order.created_at);
+                const isLate=order.status==="Not processed"&&(Date.now()-new Date(order.created_at))>30*60000;
+                return(
+                  <div key={order.id} className={`kcard${dragId===order.id?" drag":""}`}
+                    data-status={order.status}
+                    draggable onDragStart={e=>{setDragId(order.id);e.dataTransfer.effectAllowed="move";}}
+                    onDragEnd={()=>setDragId(null)} onClick={()=>openOrder({...order,line_items:items})}>
+
+                    {/* Header: avatar + name + phone */}
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                      <Av name={name} size={36}/>
+                      <div style={{flex:1,overflow:"hidden"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:"#1e293b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{phone||"Sin teléfono"}</div>
+                      </div>
+                      {order._real&&<span style={{fontSize:9,background:"#dcfce7",color:"#16a34a",padding:"2px 5px",borderRadius:4,fontWeight:700,border:"1px solid #bbf7d0",flexShrink:0}}>LIVE</span>}
+                    </div>
+
+                    {/* Order # + Total */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"7px 10px",marginBottom:10}}>
+                      <span style={{fontSize:11,color:"#94a3b8",fontFamily:"DM Mono"}}>#{order.id?.toString().slice(-6)}</span>
+                      <span style={{fontSize:13,fontWeight:700,color:"#1e293b",fontFamily:"DM Mono"}}>{cop(order.total)}</span>
+                    </div>
+
+                    {/* Products */}
+                    <div style={{marginBottom:10}}>
+                      {items.slice(0,2).map((item,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#475569",marginBottom:2}}>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>×{item.amount} {item.name}</span>
+                          <span style={{color:"#94a3b8",fontFamily:"DM Mono"}}>{copRaw(parseFloat(item.price)*parseInt(item.amount||1))}</span>
+                        </div>
+                      ))}
+                      {items.length>2&&<div style={{fontSize:10,color:"#cbd5e1"}}>+{items.length-2} productos más</div>}
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{borderTop:"1px solid #f1f5f9",paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      {isLate
+                        ?<span style={{fontSize:10,color:"#ef4444",fontWeight:600,display:"flex",alignItems:"center",gap:3}}>🕐 {ago} de atraso</span>
+                        :<span style={{fontSize:10,color:"#94a3b8",display:"flex",alignItems:"center",gap:3}}>🕐 hace {ago}</span>
+                      }
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        {order.payment_method&&<span style={{fontSize:9,background:"#f1f5f9",color:"#64748b",padding:"2px 6px",borderRadius:4,border:"1px solid #e2e8f0"}}>{order.payment_method}</span>}
+                        <span style={{width:20,height:20,borderRadius:"50%",background:`${STATUS[sk].col}15`,border:`1.5px solid ${STATUS[sk].col}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10}}>{STATUS[sk].icon}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 };
