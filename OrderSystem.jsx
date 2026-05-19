@@ -29,10 +29,31 @@ const TOPROD=[{name:"Hamburguesa BBQ",qty:34},{name:"Alitas BBQ",qty:28},{name:"
 const PAYS=[{name:"Nequi",pct:38,color:"#7c3aed"},{name:"Efectivo",pct:28,color:"#f59e0b"},{name:"Daviplata",pct:22,color:"#f97316"},{name:"Tarjeta",pct:12,color:"#3b82f6"}];
 
 const CSS=`
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-.os{font-family:'Syne',sans-serif;background:#060a12;color:#dde6f0;min-height:100vh;display:flex;overflow:hidden;position:relative;}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+.os{font-family:Arial,Helvetica,sans-serif;background:#060a12;color:#dde6f0;min-height:100vh;display:flex;overflow:hidden;position:relative;}
 .os *{box-sizing:border-box;margin:0;padding:0;}
 .os ::-webkit-scrollbar{width:3px;height:3px;}.os ::-webkit-scrollbar-thumb{background:#25D36640;border-radius:4px;}
+
+/* LIGHT MODE */
+.os.light{background:#f8fafc;color:#1e293b;}
+.os.light .sidebar{background:#fff;border-right:1px solid #e2e8f0;}
+.os.light .navbtn{color:#94a3b8;}.os.light .navbtn:hover{background:#f1f5f9;}
+.os.light .navbtn.on{background:#dcfce7;color:#16a34a;}
+.os.light .navbtn.on::before{background:#25D366;}
+.os.light .hdr{background:#fff;border-bottom:1px solid #e2e8f0;color:#1e293b;}
+.os.light .body{background:#f8fafc;}
+.os.light .card{background:#fff;border:1px solid #e2e8f0;}
+.os.light .stat{background:#fff;border:1px solid #e2e8f0;}
+.os.light .inp{background:#f1f5f9;border:1px solid #e2e8f0;color:#1e293b;}
+.os.light .modal{background:#fff;border:1px solid #e2e8f0;}
+.os.light .toast{background:#fff;border:1px solid #e2e8f0;}
+.os.light .kcol{background:#f1f5f9;border:1px solid #e2e8f0;}
+.os.light .kcard{background:#fff;border:1px solid #e2e8f0;color:#1e293b;}
+.os.light .auth-bg{background:#f8fafc;}
+.os.light .auth-card{background:#fff;border:1px solid #e2e8f0;}
+.os.light .auth-lbl{color:#475569;}
+.os.light .auth-title{color:#1e293b;}
+.os.light .auth-sub{color:#64748b;}
 .auth-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#060a12;overflow-y:auto;}
 .auth-card{background:#0d1526;border:1px solid #1a2742;border-radius:20px;padding:40px;width:420px;max-width:calc(100vw - 40px);margin:auto;}
 .auth-logo{width:150px;margin:0 auto 28px;display:block;}
@@ -579,6 +600,7 @@ export default function App(){
   const [toasts,setToasts]=useState([]);
   const [loading,setLoading]=useState(false);
   const [time,setTime]=useState(new Date());
+  const [dark,setDark]=useState(()=>localStorage.getItem("cht_theme")!=="light");
   const tid=useRef(0);
 
   useEffect(()=>{let el=document.getElementById("__os");if(!el){el=document.createElement("style");el.id="__os";document.head.appendChild(el);}el.textContent=CSS;},[]);
@@ -636,7 +658,7 @@ export default function App(){
   const todayRev=orders.reduce((s,o)=>s+(o.total||0),0);
 
   return(
-    <div className="os" style={{position:"relative"}}>
+    <div className={`os${dark?"":" light"}`} style={{position:"relative"}}>
       <nav className="sidebar">
         <div style={{width:40,height:40,borderRadius:10,background:"#060a12",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8,overflow:"hidden",flexShrink:0}}>
           <img src={LOGO} style={{width:38,height:"auto",objectFit:"contain"}} alt="Chatiico"/>
@@ -654,6 +676,9 @@ export default function App(){
           <span style={{fontSize:11,color:"#374151"}}>{view==="pipeline"?`· ${orders.length} pedidos`:view==="analytics"?`· ${time.toLocaleDateString("es-CO")}`:""}</span>
           <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
             <span className="mono" style={{fontSize:11,color:"#374151"}}>{time.toLocaleTimeString("es-CO")}</span>
+            <button onClick={()=>{const nd=!dark;setDark(nd);localStorage.setItem("cht_theme",nd?"dark":"light");}} style={{background:"transparent",border:"1px solid #1e2d3d",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}} title={dark?"Modo claro":"Modo oscuro"}>
+              {dark?"🌙":"☀️"}
+            </button>
             <span className="mono" style={{fontSize:12,color:"#25D366",background:"#0d2e1c",padding:"4px 10px",borderRadius:8,border:"1px solid #25D36618"}}>{cop(todayRev)}</span>
             {pending>0&&<span style={{background:"#f59e0b",color:"#000",fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:8}}>{pending} nuevo{pending>1?"s":""}</span>}
             <Av name={user.name} size={30}/>
