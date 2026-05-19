@@ -546,7 +546,7 @@ const UsersView=({user,addToast})=>{
 };
 
 /* ── SETTINGS ── */
-const SettingsView=({user,setUser,addToast})=>{
+const SettingsView=({user,setUser,addToast,setOrders})=>{
   const [cfg,setCfg]=useState({chatico_token:user.chatico_token||"",flow_confirmed:user.flows?.confirmed||"",flow_processing:user.flows?.processing||"",flow_shipped:user.flows?.shipped||"",flow_delivered:user.flows?.delivered||"",flow_cancelled:user.flows?.cancelled||""});
   const [loading,setLoading]=useState(false);
 
@@ -585,6 +585,17 @@ const SettingsView=({user,setUser,addToast})=>{
             <div key={k} style={{padding:"10px 13px",background:"#111827",borderRadius:8,border:"1px solid #1e2d3d"}}><div style={{fontSize:10,color:"#4b5563",marginBottom:3}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>
           ))}
         </div>
+      </div>
+      <div className="card" style={{padding:20,borderColor:"#ef444430",borderWidth:2,background:"#3c0a0a40"}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:"#ef4444"}}>🗑️ Zona de peligro</div>
+        <div style={{fontSize:12,color:"#f87171",marginBottom:14}}>Elimina todos los pedidos de forma permanente. Esta acción no se puede deshacer.</div>
+        <button className="btn" style={{background:"#ef4444",color:"#fff",border:"none",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontWeight:700}} onClick={async()=>{
+          if(confirm("⚠️ ¿Eliminar TODOS los pedidos? Esta acción no se puede deshacer.")){
+            const r=await apiFetch("/orders/delete-all",{method:"DELETE"});
+            if(r?.success){addToast({icon:"🗑️",title:"Pedidos eliminados",msg:"Todos los pedidos fueron borrados"});setOrders([]);}
+            else addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo limpiar"});
+          }
+        }}>🗑️ Limpiar todos los pedidos</button>
       </div>
     </div>
   );
@@ -688,7 +699,7 @@ export default function App(){
           {view==="pipeline"  &&<KanbanView orders={orders} setOrders={setOrders} openOrder={setSelOrder} addToast={addToast} user={user}/>}
           {view==="analytics" &&<AnalyticsView orders={orders}/>}
           {view==="users"     &&<UsersView user={user} addToast={addToast}/>}
-          {view==="settings"  &&<SettingsView user={user} setUser={setUser} addToast={addToast}/>}
+          {view==="settings"  &&<SettingsView user={user} setUser={setUser} addToast={addToast} setOrders={setOrders}/>}
         </div>
       </div>
       {selOrder&&<OrderModal order={selOrder} onClose={()=>setSelOrder(null)} onStatus={onStatus} onPaid={onPaid} loading={loading}/>}
