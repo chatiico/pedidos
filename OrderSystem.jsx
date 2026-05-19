@@ -2,11 +2,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const API_BASE    = "https://api.chatico.net";
-const CHATICO_API = "https://app.chatico.io/api";
 const LOGO = "https://chatiico.com/wp-content/uploads/2024/06/cropped-cropped-logo-col-completo-IA-blanco24-.png";
 
-const cop = (c) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format((c||0)/100);
-const copRaw = (p) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(parseFloat(p)||0);
+const cop = (c) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(Math.floor((c||0)/100));
+const copRaw = (p) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(Math.floor(parseFloat(p)||0));
 const fmtTime = (iso) => { try{return new Date(iso).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"});}catch{return "--:--";} };
 const getToken = () => localStorage.getItem("cht_token");
 const getUser  = () => { try{return JSON.parse(localStorage.getItem("cht_user"));}catch{return null;} };
@@ -22,7 +21,6 @@ const SK = ["Not processed","Processing","Shipped","Delivered","Cancelled"];
 
 const authH = () => ({"Content-Type":"application/json","Authorization":`Bearer ${getToken()}`});
 const apiFetch = async(path,opts={}) => { try{const r=await fetch(`${API_BASE}${path}`,{headers:authH(),...opts});return await r.json();}catch{return null;} };
-const chFetch  = async(path,token,opts={}) => { try{const r=await fetch(`${CHATICO_API}${path}`,{headers:{"accept":"application/json","X-ACCESS-TOKEN":token},...opts});return await r.json();}catch{return null;} };
 
 const WEEKLY=[{d:"Lun",v:145000,p:8},{d:"Mar",v:220000,p:12},{d:"Mié",v:189000,p:10},{d:"Jue",v:310000,p:17},{d:"Vie",v:278000,p:15},{d:"Sáb",v:390000,p:21},{d:"Hoy",v:246300,p:13}];
 const TOPROD=[{name:"Hamburguesa BBQ",qty:34},{name:"Alitas BBQ",qty:28},{name:"Salchipapas",qty:22},{name:"Jugo Natural",qty:19},{name:"Gaseosa Naranja",qty:15}];
@@ -33,8 +31,6 @@ const CSS=`
 .os{font-family:Arial,Helvetica,sans-serif;background:#060a12;color:#dde6f0;min-height:100vh;display:flex;overflow:hidden;position:relative;}
 .os *{box-sizing:border-box;margin:0;padding:0;}
 .os ::-webkit-scrollbar{width:3px;height:3px;}.os ::-webkit-scrollbar-thumb{background:#25D36640;border-radius:4px;}
-
-/* LIGHT MODE */
 .os.light{background:#f8fafc;color:#1e293b;}
 .os.light .sidebar{background:#fff;border-right:1px solid #e2e8f0;}
 .os.light .navbtn{color:#94a3b8;}.os.light .navbtn:hover{background:#f1f5f9;}
@@ -142,7 +138,6 @@ const Av=({name="",size=34})=>{
 const SBadge=({s,small})=>{const st=STATUS[s]||STATUS["Not processed"];return <span className="badge" style={{background:st.bg,color:st.col,border:`1px solid ${st.col}25`,fontSize:small?9:10}}>{st.icon} {st.label}</span>;};
 const CTip=({active,payload,label})=>{if(!active||!payload?.length)return null;return<div style={{background:"#0d1526",border:"1px solid #1a2742",borderRadius:8,padding:"9px 13px"}}><div style={{fontSize:10,color:"#64748b",marginBottom:3,fontFamily:"DM Mono"}}>{label}</div>{payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color||"#25D366",fontFamily:"DM Mono"}}>{typeof p.value==="number"&&p.value>9999?cop(p.value*100):p.value}</div>)}</div>;};
 
-/* ── AUTH ── */
 const AuthScreen=({onLogin})=>{
   const [scr,setScr]=useState("login");
   const [loading,setLoading]=useState(false);
@@ -185,7 +180,6 @@ const AuthScreen=({onLogin})=>{
     <div className="auth-bg">
       <div className="auth-card fade">
         <img src={LOGO} className="auth-logo" alt="Chatiico"/>
-
         {scr==="login"&&<>
           <h2 className="auth-title">Bienvenido</h2>
           <p className="auth-sub">Ingresa a tu cuenta de pedidos</p>
@@ -204,7 +198,6 @@ const AuthScreen=({onLogin})=>{
           <div className="auth-div">o</div>
           <div style={{textAlign:"center",fontSize:13,color:"#64748b"}}>¿No tienes cuenta? <button className="auth-link" onClick={()=>{setScr("register");setErr("");setOk("");}}>Regístrate gratis</button></div>
         </>}
-
         {scr==="register"&&<>
           <h2 className="auth-title">Crear cuenta</h2>
           <p className="auth-sub">Empieza a gestionar tus pedidos</p>
@@ -223,7 +216,6 @@ const AuthScreen=({onLogin})=>{
           <div className="auth-div">o</div>
           <div style={{textAlign:"center",fontSize:13,color:"#64748b"}}>¿Ya tienes cuenta? <button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>Iniciar sesión</button></div>
         </>}
-
         {scr==="forgot"&&<>
           <h2 className="auth-title">Recuperar contraseña</h2>
           <p className="auth-sub">Te enviaremos un enlace a tu email</p>
@@ -233,7 +225,6 @@ const AuthScreen=({onLogin})=>{
           <button className="btn btn-g btn-full" onClick={forgot} disabled={loading}>{loading?<span className="spin"/>:"Enviar enlace"}</button>
           <div style={{textAlign:"center",marginTop:16}}><button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>← Volver al login</button></div>
         </>}
-
         {scr==="confirm"&&<>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:48,marginBottom:16}}>📧</div>
@@ -243,14 +234,12 @@ const AuthScreen=({onLogin})=>{
             <div style={{marginTop:20}}><button className="auth-link" onClick={()=>{setScr("login");setErr("");setOk("");}}>← Volver al login</button></div>
           </div>
         </>}
-
         <div style={{textAlign:"center",marginTop:24,fontSize:11,color:"#1e2d3d"}}>Powered by Chatiico © 2026</div>
       </div>
     </div>
   );
 };
 
-/* ── ORDER MODAL ── */
 const OrderModal=({order,onClose,onStatus,onPaid,loading})=>{
   if(!order)return null;
   const addr=order.shipping_address||{};
@@ -300,7 +289,6 @@ const OrderModal=({order,onClose,onStatus,onPaid,loading})=>{
   );
 };
 
-/* ── KANBAN ── */
 const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
   const [dragId,setDragId]=useState(null);
   const [overCol,setOverCol]=useState(null);
@@ -325,16 +313,12 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
     const order=orders.find(o=>o.id===dragId);
     if(!order||order.status===ts){setDragId(null);return;}
     setOrders(p=>p.map(o=>o.id===dragId?{...o,status:ts}:o));setDragId(null);
-    
-    // Solo actualizar el status, el backend envía el flow automáticamente
     await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ts})});
-    
     addToast({icon:STATUS[ts].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ts].label}`});
   };
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {/* Search bar */}
       <div style={{padding:"10px 20px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
         <div style={{position:"relative",flex:1,maxWidth:300}}>
           <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#94a3b8"}}>🔍</span>
@@ -347,8 +331,6 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
         {SK.map(sk=>(
           <div key={sk} className={`kcol${overCol===sk?" ov":""}`}
             onDragOver={e=>{e.preventDefault();setOverCol(sk);}} onDragLeave={()=>setOverCol(null)} onDrop={e=>drop(e,sk)}>
-
-            {/* Column header */}
             <div style={{flexShrink:0,paddingBottom:4}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -359,7 +341,6 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
               <div style={{fontSize:12,color:"#64748b",fontFamily:"DM Mono",marginBottom:8}}>{cop(colTotal(sk))}</div>
               <div style={{height:3,background:STATUS[sk].col,borderRadius:2}}/>
             </div>
-
             <div className="kbody">
               {filtered(sk).length===0&&(
                 <div style={{textAlign:"center",color:"#cbd5e1",fontSize:12,padding:"24px 0",border:"2px dashed #e2e8f0",borderRadius:8,marginTop:2}}>Sin pedidos</div>
@@ -375,8 +356,6 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
                     data-status={order.status}
                     draggable onDragStart={e=>{setDragId(order.id);e.dataTransfer.effectAllowed="move";}}
                     onDragEnd={()=>setDragId(null)} onClick={()=>openOrder({...order,line_items:items})}>
-
-                    {/* Header: avatar + name + phone */}
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                       <Av name={name} size={36}/>
                       <div style={{flex:1,overflow:"hidden"}}>
@@ -385,14 +364,10 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
                       </div>
                       {order._real&&<span style={{fontSize:9,background:"#dcfce7",color:"#16a34a",padding:"2px 5px",borderRadius:4,fontWeight:700,border:"1px solid #bbf7d0",flexShrink:0}}>LIVE</span>}
                     </div>
-
-                    {/* Order # + Total */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"7px 10px",marginBottom:10}}>
                       <span style={{fontSize:11,color:"#94a3b8",fontFamily:"DM Mono"}}>#{order.id?.toString().slice(-6)}</span>
                       <span style={{fontSize:13,fontWeight:700,color:"#1e293b",fontFamily:"DM Mono"}}>{cop(order.total)}</span>
                     </div>
-
-                    {/* Products */}
                     <div style={{marginBottom:10}}>
                       {items.slice(0,2).map((item,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#475569",marginBottom:2}}>
@@ -402,8 +377,6 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
                       ))}
                       {items.length>2&&<div style={{fontSize:10,color:"#cbd5e1"}}>+{items.length-2} productos más</div>}
                     </div>
-
-                    {/* Footer */}
                     <div style={{borderTop:"1px solid #f1f5f9",paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       {isLate
                         ?<span style={{fontSize:10,color:"#ef4444",fontWeight:600,display:"flex",alignItems:"center",gap:3}}>🕐 {ago} de atraso</span>
@@ -425,7 +398,6 @@ const KanbanView=({orders,setOrders,openOrder,addToast,user})=>{
   );
 };
 
-/* ── ANALYTICS ── */
 const AnalyticsView=({orders})=>{
   const [month,setMonth]=useState("");
   const delivered=orders.filter(o=>o.status==="Delivered");
@@ -491,7 +463,6 @@ const AnalyticsView=({orders})=>{
   );
 };
 
-/* ── USERS ── */
 const UsersView=({user,addToast})=>{
   const [users,setUsers]=useState([]);
   const [showInv,setShowInv]=useState(false);
@@ -545,7 +516,6 @@ const UsersView=({user,addToast})=>{
   );
 };
 
-/* ── SETTINGS ── */
 const SettingsView=({user,setUser,addToast,setOrders})=>{
   const [cfg,setCfg]=useState({chatico_token:user.chatico_token||"",flow_confirmed:user.flows?.confirmed||"",flow_processing:user.flows?.processing||"",flow_shipped:user.flows?.shipped||"",flow_delivered:user.flows?.delivered||"",flow_cancelled:user.flows?.cancelled||""});
   const [loading,setLoading]=useState(false);
@@ -601,7 +571,6 @@ const SettingsView=({user,setUser,addToast,setOrders})=>{
   );
 };
 
-/* ── ROOT ── */
 export default function App(){
   const [user,setUser]=useState(null);
   const [ready,setReady]=useState(false);
@@ -616,27 +585,12 @@ export default function App(){
 
   useEffect(()=>{let el=document.getElementById("__os");if(!el){el=document.createElement("style");el.id="__os";document.head.appendChild(el);}el.textContent=CSS;},[]);
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t);},[]);
-
-  useEffect(()=>{
-    if(!user) return;
-    const t=setInterval(()=>loadOrders(user),30000);
-    return()=>clearInterval(t);
-  },[user]);
-
-  useEffect(()=>{
-    const token=getToken();const u=getUser();
-    if(token&&u){setUser(u);loadOrders(u);}
-    setReady(true);
-  },[]);
+  useEffect(()=>{if(!user) return; const t=setInterval(()=>loadOrders(user),30000);return()=>clearInterval(t);},[user]);
+  useEffect(()=>{const token=getToken();const u=getUser();if(token&&u){setUser(u);loadOrders(u);}setReady(true);},[]);
 
   const loadOrders=async(u)=>{
     const db=await apiFetch("/orders");
-    if(db?.length)setOrders(db.map(o=>({...o,
-      line_items:typeof o.items==="string"?JSON.parse(o.items):o.items||[],
-      shipping_address:{name:o.contact_name,phone:o.contact_phone,address1:o.contact_address,city:o.contact_city},
-      user:{full_name:o.contact_name,phone:o.contact_phone},
-      _real:true
-    })));
+    if(db?.length)setOrders(db.map(o=>({...o,line_items:typeof o.items==="string"?JSON.parse(o.items):o.items||[],shipping_address:{name:o.contact_name,phone:o.contact_phone,address1:o.contact_address,city:o.contact_city},user:{full_name:o.contact_name,phone:o.contact_phone},_real:true})));
   };
 
   const handleLogin=(u)=>{setUser(u);loadOrders(u);};
@@ -645,25 +599,18 @@ export default function App(){
   const addToast=useCallback(({icon,title,msg})=>{const id=++tid.current;setToasts(p=>[...p,{id,icon,title,msg}]);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),4500);},[]);
 
   const onStatus=async(order,ns)=>{
-    console.log("Actualizando estado a:", ns);
     setOrders(p=>p.map(o=>o.id===order.id?{...o,status:ns}:o));
     setSelOrder(null);
-    
-    // Solo actualizar el status, el backend envía el flow automáticamente
-    const r = await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ns})});
-    
-    if(r?.success) {
-      addToast({icon:STATUS[ns].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ns].label}`});
-    } else {
-      addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo actualizar"});
-    }
+    const r=await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ns})});
+    if(r?.success){addToast({icon:STATUS[ns].icon,title:"Estado actualizado",msg:`${order.contact_name||"Pedido"} → ${STATUS[ns].label}`});}
+    else{addToast({icon:"❌",title:"Error",msg:r?.error||"No se pudo actualizar"});}
   };
 
   const onPaid=async(order)=>{
     setSelOrder(null);setLoading(true);
-    const r=await chFetch(`/contacts/${order.user_id}/pay/${order.id}`,user.chatico_token,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({amount_received:order.total})});
+    const r=await fetch(`${API_BASE}/orders/${order.id}/pay`,{method:"POST",headers:authH(),body:JSON.stringify({amount:order.total})}).then(r=>r.json()).catch(()=>null);
     setLoading(false);
-    addToast(r?.success?{icon:"💰",title:"Pago registrado",msg:cop(order.total)}:{icon:"⚠️",title:"Error",msg:r?.error?.message||"No se pudo registrar"});
+    addToast(r?.success?{icon:"💰",title:"Pago registrado",msg:cop(order.total)}:{icon:"⚠️",title:"Error",msg:r?.error||"No se pudo registrar"});
   };
 
   if(!ready)return<div style={{background:"#060a12",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><span className="spin" style={{width:32,height:32,borderWidth:3}}/></div>;
@@ -689,7 +636,7 @@ export default function App(){
         <header className="hdr">
           <div className="dot"/>
           <span style={{fontSize:13,fontWeight:700}}>{NAVS.find(n=>n.id===view)?.label}</span>
-          <span style={{fontSize:11,color:"#374151"}}>{view==="pipeline"?`· ${orders.length} pedidos`:view==="analytics"?`· ${time.toLocaleDateString("es-CO")}`:""}</span>
+          <span style={{fontSize:11,color:"#374151"}}>{view==="pipeline"?`· ${orders.length} pedidos`:view==="analytics"?`· ${time.toLocaleDateString("es-CO")}`:"" }</span>
           <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
             <span className="mono" style={{fontSize:11,color:"#374151"}}>{time.toLocaleTimeString("es-CO")}</span>
             <button onClick={()=>{const nd=!dark;setDark(nd);localStorage.setItem("cht_theme",nd?"dark":"light");}} style={{background:"transparent",border:"1px solid #1e2d3d",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}} title={dark?"Modo claro":"Modo oscuro"}>
