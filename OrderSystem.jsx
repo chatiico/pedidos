@@ -649,14 +649,27 @@ export default function App(){
   const addToast=useCallback(({icon,title,msg})=>{const id=++tid.current;setToasts(p=>[...p,{id,icon,title,msg}]);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),4500);},[]);
 
   const onStatus=async(order,ns)=>{
+    console.log("=== DEBUG onStatus ===");
+    console.log("Order:", order);
+    console.log("Contact ID:", order.contact_id);
+    console.log("User flows:", user?.flows);
+    console.log("Chatico token:", user?.chatico_token);
+    console.log("Order._real:", order._real);
+    
     setOrders(p=>p.map(o=>o.id===order.id?{...o,status:ns}:o));setSelOrder(null);
     await apiFetch(`/orders/${order.id}/status`,{method:"PUT",body:JSON.stringify({status:ns})});
     if(order._real&&user?.chatico_token&&user?.flows){
       const fm={"Not processed":user.flows.confirmed,"Processing":user.flows.processing,"Shipped":user.flows.shipped,"Delivered":user.flows.delivered,"Cancelled":user.flows.cancelled};
       const fid=fm[ns];
+      console.log("Flow ID seleccionado:", fid);
       if(fid&&order.contact_id){
+        console.log("Enviando flow a:", order.contact_id);
         await chFetch(`/contacts/${order.contact_id}/send/${fid}`,user.chatico_token,{method:"POST"});
+      } else {
+        console.log("No se envió flow:", {fid, contact_id: order.contact_id});
       }
+    } else {
+      console.log("Condición no cumplida:", {_real: order._real, token: !!user?.chatico_token, flows: !!user?.flows});
     }
     addToast({icon:STATUS[ns].icon,title:"Estado actualizado",msg:`${STATUS[ns].label} — WhatsApp enviado ✓`});
   };
